@@ -35,6 +35,10 @@ def _parse_args():
     p.add_argument("--api-key", help="API key (default: $OPENAI_API_KEY)")
     p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")
     p.add_argument("--yes", action="store_true", help="Auto-approve every tool call (for scripts and CI)")
+    p.add_argument("--persistent-session", help="Use an authenticated Redis-backed session")
+    p.add_argument("--resume-pending", action="store_true", help="Resume a persistent session without a new message")
+    p.add_argument("--paper-corpus", help="Run paper QA against a local chunk index")
+    p.add_argument("--index-papers", nargs=2, metavar=("INPUT_JSON", "INDEX_JSON"), help="Build a local paper index")
     p.add_argument("--demo", action="store_true", help="Run the offline scripted demo (no API key needed)")
     p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
@@ -43,6 +47,12 @@ def _parse_args():
 
 def main():
     args = _parse_args()
+
+    if args.index_papers:
+        from .papers.corpus import build_corpus
+        count = build_corpus(*args.index_papers)
+        console.print(f"Indexed {count} chunks.")
+        return
 
     if args.demo:
         from .demo import run_demo
@@ -82,6 +92,11 @@ def main():
         temperature=config.temperature,
         max_tokens=config.max_tokens,
     )
+    if args.paper_corpus and args.persistent_session:
+        raise ValueError("paper corpus mode and persistent sessions cannot yet be combined")
+    if args.paper_corpus:
+        _paper_repl(llm, args.paper_corpus, args.prompt)
+        return
     # consent layer: ask in the REPL, refuse in one-shot mode, --yes skips it
     if args.yes:
         permission = Permission(allow_all=True)
@@ -96,6 +111,25 @@ def main():
         permission=permission,
         hooks=load_hooks(),
     )
+
+    if args.persistent_session:
+        import redis
+
+        from .persistent import JWTAuthenticator, PersistentAgent, SessionStore
+        required = ("CORECODER_JWT", "CORECODER_JWT_KEY", "CORECODER_JWT_ISSUER", "CORECODER_JWT_AUDIENCE", "REDIS_URL")
+        missing = [name for name in required if not os.environ.get(name)]
+        if missing:
+            raise ValueError("Missing configuration: " + ", ".join(missing))
+        if args.resume_pending == bool(args.prompt):
+            raise ValueError("Use either -p MESSAGE or --resume-pending with --persistent-session")
+        store = SessionStore(redis.Redis.from_url(os.environ["REDIS_URL"]),
+                             os.environ.get("CORECODER_SQLITE_PATH", "corecoder-memory.sqlite3"))
+        auth = JWTAuthenticator(os.environ["CORECODER_JWT_KEY"], os.environ["CORECODER_JWT_ISSUER"],
+                                os.environ["CORECODER_JWT_AUDIENCE"])
+        result = PersistentAgent(agent, store, auth).run(os.environ["CORECODER_JWT"], args.persistent_session,
+                                                         None if args.resume_pending else args.prompt)
+        console.print(result)
+        return
 
     # resume saved session
     if args.resume:
@@ -391,3 +425,45 @@ def _show_help():
 def _brief(kwargs: dict, maxlen: int = 80) -> str:
     s = ", ".join(f"{k}={repr(v)[:40]}" for k, v in kwargs.items())
     return s[:maxlen] + ("..." if len(s) > maxlen else "")
+
+
+def _paper_repl(llm, corpus_path, prompt=None):
+    import json
+    from pathlib import Path
+    try:
+        from sentence_transformers import CrossEncoder, SentenceTransformer
+    except ImportError as exc:
+        raise RuntimeError('Install paper dependencies with pip install -e ".[papers]"') from exc
+    from .papers.agent import PaperAgent
+    from .papers.retrieval import Retriever
+    chunks = json.loads(Path(corpus_path).read_text(encoding="utf-8"))
+    embedding = SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"))
+    reranker = CrossEncoder(os.environ.get("PAPER_RERANK_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"))
+    agent = PaperAgent(llm, Retriever(chunks, embedding, reranker))
+    if prompt:
+        console.print(agent.chat(prompt))
+        return
+    console.print("Paper QA. Commands: /trace, /memory, /reset, /help, /exit")
+    while True:
+        try:
+            question = pt_prompt("Paper > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if question in ("/exit", "/quit", "exit", "quit"):
+            break
+        if question == "/trace":
+            console.print_json(json.dumps(agent.state.pipeline_trace, ensure_ascii=False))
+        elif question == "/memory":
+            console.print_json(json.dumps(agent.memory(), ensure_ascii=False))
+        elif question == "/reset":
+            from .papers.agent import AgentState
+            agent.state = AgentState()
+        elif question == "/help":
+            console.print("/trace show stages; /memory show summary and recent turns; /reset clear session; /exit quit")
+        elif question.startswith("/"):
+            console.print("Unknown command. Use /help.")
+        elif question:
+            try:
+                console.print(agent.chat(question))
+            except Exception as exc:  # noqa: BLE001
+                console.print(f"[red]Error: {exc}[/red]")
