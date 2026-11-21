@@ -26,7 +26,7 @@ def test_authenticated_session_plan(tmp_path, monkeypatch):
     monkeypatch.setenv("CORECODER_JWT_AUDIENCE", "app")
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "test.sqlite")
     monkeypatch.setattr(web, "get_store", lambda: store)
-    monkeypatch.setattr(web, "supervisor", lambda provider: Supervisor(Model(), store))
+    monkeypatch.setattr(web, "supervisor", lambda provider, user: Supervisor(Model(), store))
     client = TestClient(web.app)
     assert client.get("/api/sessions/demo").status_code in (401, 403)
     token = jwt.encode({"sub": "alice", "iss": "issuer", "aud": "app", "iat": int(time.time()),

@@ -40,13 +40,24 @@ def validate_plan(plan):
 
 
 class ResearchTools:
-    def __init__(self, retriever=None):
+    def __init__(self, retriever=None, online_search=None, online_import=None):
         self.retriever = retriever
+        self.online_search = online_search
+        self.online_import = online_import
 
     def schemas(self, worker):
-        if worker == "retrieval" and self.retriever:
-            return [{"type": "function", "function": {"name": "retrieve_chunks", "description": "Search the local paper corpus",
-                "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}]
+        if worker == "retrieval":
+            tools = []
+            if self.retriever:
+                tools.append({"type": "function", "function": {"name": "retrieve_chunks", "description": "Search the local paper corpus",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}})
+            if self.online_search:
+                tools.append({"type": "function", "function": {"name": "search_arxiv", "description": "Search arXiv paper metadata",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}})
+            return tools
+        if worker == "ingestion" and self.online_import:
+            return [{"type": "function", "function": {"name": "import_arxiv", "description": "Import an arXiv PDF into the user's corpus",
+                "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}}]
         if worker == "evaluation":
             return [{"type": "function", "function": {"name": "evaluate_metrics", "description": "Calculate labeled evaluation metrics",
                 "parameters": {"type": "object", "properties": {"rows": {"type": "array", "items": {"type": "object"}}},
@@ -62,6 +73,10 @@ class ResearchTools:
             if not isinstance(query, str) or not query.strip():
                 raise ValueError("query must be a nonempty string")
             return self.retriever.retrieve(query)
+        if name == "search_arxiv":
+            return self.online_search(args["query"])
+        if name == "import_arxiv":
+            return self.online_import(args["id"])
         return evaluate(args["rows"])
 
 
@@ -101,7 +116,10 @@ class Supervisor:
                     {"role": "system", "content": "You are a research supervisor. Return JSON only: {\"tasks\":[{\"id\":"
                      "\"...\",\"worker\":\"retrieval|ingestion|analysis|delivery|evaluation\",\"goal\":\"...\","
                      "\"depends_on\":[\"prior task id\"]}]}. Order dependencies first. Use only needed workers. "
-                     "Do not claim unavailable capabilities. Plan evidence retrieval before answering research questions."},
+                     "Do not claim unavailable capabilities. Plan evidence retrieval before answering research questions. "
+                     "The retrieval worker can search_arxiv or retrieve_chunks. The ingestion worker can import_arxiv "
+                     "using an identifier found by the retrieval worker. When online acquisition is requested, "
+                     "plan search, then import, then local retrieval with dependencies in that order."},
                     {"role": "user", "content": json.dumps({"question": question, "summary": summary, "history": history[-10:]},
                                                               ensure_ascii=False)},
                 ])
