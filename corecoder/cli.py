@@ -46,6 +46,9 @@ def _parse_args():
 
 
 def main():
+    from .runtime_config import apply_runtime_config
+
+    apply_runtime_config()
     args = _parse_args()
 
     if args.index_papers:

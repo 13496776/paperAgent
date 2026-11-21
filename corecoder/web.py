@@ -14,8 +14,10 @@ from pydantic import BaseModel, Field
 
 from .llm import LLM
 from .persistent import JWTAuthenticator, SessionStore
+from .runtime_config import apply_runtime_config
 from .workflow.engine import ResearchTools, Supervisor
 
+apply_runtime_config()
 app = FastAPI(title="Paper Research Agent")
 security = HTTPBearer()
 
@@ -114,6 +116,12 @@ def handle(call):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/settings")
+def public_settings():
+    provider = "deepseek" if os.environ.get("DEEPSEEK_API_KEY") and not os.environ.get("OPENAI_API_KEY") else "openai"
+    return {"default_provider": provider}
 
 
 @app.get("/api/health")

@@ -1,0 +1,17 @@
+{
+  "embedding_model": "BAAI/bge-m3",
+  "reranker_model": "BAAI/bge-reranker-v2-m3",
+  "deepseek_api_key": "",
+  "openai_api_key": "",
+  "deepseek_model": "deepseek-chat",
+  "openai_model": "gpt-4.1-mini",
+  "deepseek_base_url": "https://api.deepseek.com",
+  "openai_base_url": "",
+  "redis_url": "redis://127.0.0.1:6379/0",
+  "sqlite_path": "corecoder-memory.sqlite3",
+  "chunk_size": 1024,
+  "chunk_overlap": 50,
+  "rerank_threshold": 0.3,
+  "retrieval_limit": 5,
+  "retrieval_candidates": 30
+}

@@ -72,7 +72,11 @@ def _section_chunks(section, encoder, size, overlap):
         offset = max(offset + 1, end - overlap)
 
 
-def chunks_for_paper(paper, size=1024, overlap=50, embedding_model=None):
+def chunks_for_paper(paper, size=None, overlap=None, embedding_model=None):
+    if size is None:
+        size = int(os.environ.get("PAPER_CHUNK_SIZE", "1024"))
+    if overlap is None:
+        overlap = int(os.environ.get("PAPER_CHUNK_OVERLAP", "50"))
     if size <= 0 or not 0 <= overlap < size:
         raise ValueError("overlap must be nonnegative and smaller than size")
     text = remove_page_margins(paper.get("text", "")).strip()

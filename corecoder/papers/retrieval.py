@@ -1,5 +1,6 @@
 """BM25, embedding retrieval, reciprocal rank fusion and cross-encoder ranking."""
 import math
+import os
 import re
 from collections import Counter
 
@@ -47,7 +48,14 @@ class Retriever:
         self.reranker = reranker
         self.vectors = embedding_model.encode([passage_text(c) for c in chunks], normalize_embeddings=True) if chunks else []
 
-    def retrieve(self, query, limit=5, candidates=30):
+    def retrieve(self, query, limit=None, candidates=None):
+        if limit is None:
+            limit = int(os.environ.get("PAPER_RETRIEVAL_LIMIT", "5"))
+        if candidates is None:
+            candidates = int(os.environ.get("PAPER_RETRIEVAL_CANDIDATES", "30"))
+        threshold = float(os.environ.get("PAPER_RERANK_THRESHOLD", "0.3"))
+        if limit < 1 or candidates < 1 or not 0 <= threshold <= 1:
+            raise ValueError("retrieval limits must be positive and rerank threshold must be between 0 and 1")
         if not self.chunks:
             return []
         lexical = bm25(query, self.chunks)
@@ -71,4 +79,4 @@ class Retriever:
         scores = self.reranker.predict([(query, passage_text(self.chunks[i])) for i in unique],
                                        activation_fn=lambda logits: logits.sigmoid())
         ranked = sorted(zip(unique, scores), key=lambda pair: float(pair[1]), reverse=True)
-        return [{**self.chunks[i], "rrf_score": fused[i], "rerank_score": float(score)} for i, score in ranked if float(score) >= 0.3][:limit]
+        return [{**self.chunks[i], "rrf_score": fused[i], "rerank_score": float(score)} for i, score in ranked if float(score) >= threshold][:limit]

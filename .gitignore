@@ -20,3 +20,4 @@ web/dist/
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
+paperagent.config.json

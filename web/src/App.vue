@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 type Task = { id: string; worker: string; goal: string; depends_on: string[]; status: string; result?: string }
 type Workflow = { question: string; status: string; tasks: Task[]; result?: string; error?: string; trace?: unknown[] }
 const token = ref('')
 const session = ref(crypto.randomUUID())
 const provider = ref('openai')
+onMounted(async () => {
+  try {
+    const response = await fetch('/api/settings')
+    if (response.ok) provider.value = (await response.json()).default_provider
+  } catch {
+    // The model selector remains available if the backend is temporarily unavailable.
+  }
+})
 const question = ref('')
 const workflow = ref<Workflow | null>(null)
 const error = ref('')

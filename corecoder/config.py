@@ -47,7 +47,8 @@ class Config:
         return cls(
             model=os.getenv("CORECODER_MODEL", "gpt-5.5"),
             api_key=api_key,
-            base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("CORECODER_BASE_URL"),
+            base_url=(os.getenv("OPENAI_BASE_URL") or os.getenv("CORECODER_BASE_URL")
+                      or (os.getenv("DEEPSEEK_BASE_URL") if not os.getenv("OPENAI_API_KEY") else None)),
             max_tokens=int(os.getenv("CORECODER_MAX_TOKENS", "4096")),
             temperature=float(os.getenv("CORECODER_TEMPERATURE", "0")),
             max_context_tokens=int(os.getenv("CORECODER_MAX_CONTEXT", "128000")),
