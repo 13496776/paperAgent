@@ -56,8 +56,8 @@ def get_tools():
 
     from .papers.retrieval import Retriever
     chunks = json.loads(Path(index).read_text(encoding="utf-8"))
-    embeddings = SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"))
-    reranker = CrossEncoder(os.environ.get("PAPER_RERANK_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"))
+    embeddings = SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", "BAAI/bge-m3"))
+    reranker = CrossEncoder(os.environ.get("PAPER_RERANK_MODEL", "BAAI/bge-reranker-v2-m3"))
     return ResearchTools(Retriever(chunks, embeddings, reranker))
 
 

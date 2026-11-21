@@ -437,8 +437,8 @@ def _paper_repl(llm, corpus_path, prompt=None):
     from .papers.agent import PaperAgent
     from .papers.retrieval import Retriever
     chunks = json.loads(Path(corpus_path).read_text(encoding="utf-8"))
-    embedding = SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"))
-    reranker = CrossEncoder(os.environ.get("PAPER_RERANK_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"))
+    embedding = SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", "BAAI/bge-m3"))
+    reranker = CrossEncoder(os.environ.get("PAPER_RERANK_MODEL", "BAAI/bge-reranker-v2-m3"))
     agent = PaperAgent(llm, Retriever(chunks, embedding, reranker))
     if prompt:
         console.print(agent.chat(prompt))

@@ -17,7 +17,7 @@ def tokenize(text):
 
 
 def bm25(query, chunks):
-    documents = [tokenize(c["title"] + " " + c["text"]) for c in chunks]
+    documents = [tokenize(passage_text(c)) for c in chunks]
     counts = [Counter(doc) for doc in documents]
     average = sum(map(len, documents)) / len(documents) if documents else 0
     terms = tokenize(query)
@@ -35,12 +35,17 @@ def bm25(query, chunks):
     return scores
 
 
+def passage_text(chunk):
+    section = chunk.get("section") or ""
+    return "\n".join(part for part in (chunk.get("title", ""), section, chunk["text"]) if part)
+
+
 class Retriever:
     def __init__(self, chunks, embedding_model, reranker):
         self.chunks = chunks
         self.embedding_model = embedding_model
         self.reranker = reranker
-        self.vectors = embedding_model.encode([c["text"] for c in chunks], normalize_embeddings=True) if chunks else []
+        self.vectors = embedding_model.encode([passage_text(c) for c in chunks], normalize_embeddings=True) if chunks else []
 
     def retrieve(self, query, limit=5, candidates=30):
         if not self.chunks:
@@ -63,6 +68,7 @@ class Retriever:
             if key not in seen:
                 seen.add(key)
                 unique.append(index)
-        scores = self.reranker.predict([(query, self.chunks[i]["text"]) for i in unique])
+        scores = self.reranker.predict([(query, passage_text(self.chunks[i])) for i in unique],
+                                       activation_fn=lambda logits: logits.sigmoid())
         ranked = sorted(zip(unique, scores), key=lambda pair: float(pair[1]), reverse=True)
-        return [{**self.chunks[i], "rrf_score": fused[i], "rerank_score": float(score)} for i, score in ranked[:limit]]
+        return [{**self.chunks[i], "rrf_score": fused[i], "rerank_score": float(score)} for i, score in ranked if float(score) >= 0.3][:limit]
