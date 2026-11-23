@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { createWorkflowSync } from './workflowSync.mjs'
 type Task = { id: string; worker: string; goal: string; depends_on: string[]; status: string; result?: string; error?: string }
-type Workflow = { question: string; status: string; tasks: Task[]; result?: string; error?: string; trace?: unknown[]; control_requested?: string }
+type Workflow = { question: string; status: string; tasks: Task[]; revision?: number; result?: string; error?: string; trace?: unknown[]; control_requested?: string }
 const token = ref('')
-const session = ref(crypto.randomUUID())
+function initialSession() {
+  try { return sessionStorage.getItem('paperagent_session') || crypto.randomUUID() }
+  catch { return crypto.randomUUID() }
+}
+const session = ref(initialSession())
+const sync = createWorkflowSync()
 const provider = ref('openai')
 const question = ref('')
 const workflow = ref<Workflow | null>(null)
 const error = ref('')
 const busy = ref(false)
 const controlBusy = ref(false)
+const confirming = ref(false)
+const syncError = ref('')
+let pollInFlight = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const corpusBusy = ref(false)
 const pdf = ref<File | null>(null)
@@ -40,6 +49,7 @@ onMounted(async () => {
       error.value = e instanceof Error ? e.message : '本地登录失败，请检查后端是否启动。'
     }
   }
+  if (token.value) void refreshWorkflow()
   pollTimer = setInterval(() => {
     if (token.value && (busy.value || ['planning', 'running'].includes(workflow.value?.status || ''))) {
       void refreshWorkflow()
@@ -84,26 +94,56 @@ function choosePdf(event: Event) {
 const names: Record<string,string> = { ingestion: '数据接入', analysis: '推理分析', retrieval: '文献检索', delivery: '生成交付', evaluation: '测评运维' }
 const labels: Record<string,string> = { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败', awaiting_approval: '等待确认', cancelled: '已取消', paused: '已暂停', planning: '规划中' }
 async function request(path: string, body?: object) {
-  const response = await fetch(`/api/sessions/${encodeURIComponent(session.value)}${path}`, {
-    method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+  const sessionId = session.value
+  const requestId = sync.begin(sessionId)
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}${path}`, {
+    method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: body ? undefined : AbortSignal.timeout(10000),
   })
   const data = await response.json().catch(() => ({ detail: `服务请求失败（HTTP ${response.status}）` }))
   if (!response.ok) throw new Error(response.status === 401 ? '访问令牌无效或已过期，请重新启动程序或粘贴有效令牌。' : data.detail || '请求失败')
-  return data
+  return { data, sessionId, requestId }
 }
+function applyWorkflow(result: { sessionId: string; requestId: number }, next: Workflow | null) {
+  if (session.value !== result.sessionId || !sync.accept(result.sessionId, next, result.requestId)) return
+  workflow.value = next
+  if (next && next.status !== 'awaiting_approval') confirming.value = false
+}
+watch(session, (id) => {
+  sync.begin(id)
+  workflow.value = null
+  syncError.value = ''
+  confirming.value = false
+  try { sessionStorage.setItem('paperagent_session', id) } catch { /* Session ID can be entered manually. */ }
+}, { flush: 'sync', immediate: true })
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 async function refreshWorkflow() {
+  if (pollInFlight) return
+  pollInFlight = true
+  const expectedSession = session.value
   try {
-    const data = await request('')
-    if (data.workflow) workflow.value = data.workflow
-  } catch {
-    // The active request reports connection and authentication errors.
+    const result = await request('')
+    if (session.value !== result.sessionId) return
+    if (result.data.workflow) {
+      applyWorkflow(result, result.data.workflow)
+      syncError.value = ''
+    } else if (workflow.value) {
+      syncError.value = '后端未找到该会话的任务状态，请检查会话 ID 或会话是否已过期。'
+    }
+  } catch (e) {
+    if (session.value === expectedSession) {
+      syncError.value = `无法同步后端状态：${e instanceof Error ? e.message : '网络连接失败'}`
+    }
+  } finally {
+    pollInFlight = false
   }
 }
 async function control(action: 'pause' | 'cancel') {
   controlBusy.value = true; error.value = ''
   try {
-    workflow.value = await request(`/${action}`, {})
+    const result = await request(`/${action}`, {})
+    applyWorkflow(result, result.data)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '控制请求失败'
     await refreshWorkflow()
@@ -112,22 +152,33 @@ async function control(action: 'pause' | 'cancel') {
   }
 }
 async function act(action: 'plan' | 'resume' | 'load') {
-  busy.value = true; error.value = ''
+  busy.value = true; error.value = ''; syncError.value = ''
+  if (action === 'resume') confirming.value = true
   try {
-    if (action === 'plan') { workflow.value = await request('/plan', { question: question.value, provider: provider.value }); question.value = '' }
-    else if (action === 'resume') workflow.value = await request('/resume', { provider: provider.value })
-    const data = await request(''); workflow.value = data.workflow || null
+    if (action === 'plan') {
+      const result = await request('/plan', { question: question.value, provider: provider.value })
+      applyWorkflow(result, result.data)
+      question.value = ''
+    } else if (action === 'resume') {
+      const result = await request('/resume', { provider: provider.value })
+      applyWorkflow(result, result.data)
+    }
+    const result = await request('')
+    applyWorkflow(result, result.data.workflow || null)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '请求失败'
     await refreshWorkflow()
-  } finally { busy.value = false }
+  } finally {
+    confirming.value = false
+    busy.value = false
+  }
 }
 </script>
 <template>
   <div class="layout"><aside class="sidebar"><div class="brand"><span class="mark">P</span><div>Paper Lab<small>RESEARCH WORKSPACE</small></div></div><div class="side-label">工作空间</div><div class="nav">◫ &nbsp; 研究工作台</div><div class="side-bottom">● &nbsp; 本地研究环境</div></aside>
   <main><header><div><div class="eyebrow">RESEARCH WORKSPACE</div><h1>研究工作台</h1><p>规划研究任务，追踪证据与执行进度。</p></div><span class="header-tag">SUPERVISOR / WORKERS</span></header>
   <div class="workspace"><section class="primary">
-    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off"></label><label>会话 ID<input v-model="session"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
+    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off"></label><label>会话 ID<input v-model="session" :disabled="busy || ['planning', 'running'].includes(workflow?.status || '')"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
     <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块，或检索并导入 arXiv 论文。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
       <div class="corpus-row"><input type="file" accept="application/pdf,.pdf" @change="choosePdf"><button :disabled="corpusBusy || !token || !pdf" @click="corpusAction('upload')">上传并建库</button></div>
       <div class="corpus-row"><input v-model="searchQuery" placeholder="搜索 arXiv 论文"><button class="secondary" :disabled="corpusBusy || !token || !searchQuery.trim()" @click="corpusAction('search')">在线检索</button></div>
@@ -136,7 +187,7 @@ async function act(action: 'plan' | 'resume' | 'load') {
       <details v-if="papers.length"><summary>已导入 {{ papers.length }} 篇论文</summary><div v-for="paper in papers" :key="paper.id" class="corpus-item"><div><strong>{{ paper.title }}</strong><small>{{ paper.source }}</small></div></div></details>
     </div>
     <div class="card"><div class="card-head"><div><h2>开始研究</h2><p>描述你的研究问题，先生成可审阅的任务计划。</p></div><select v-model="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div><textarea v-model="question" placeholder="例如：比较混合检索与重排序的作用，并整理证据来源。"></textarea><div class="prompt-footer"><span>计划生成后需要确认才会执行</span><button :disabled="busy || !token || !question.trim()" @click="act('plan')">{{ busy ? '处理中…' : '生成计划 →' }}</button></div></div>
-    <div v-if="error" class="error">{{ error }}</div>
-    <div v-if="workflow" class="card"><div class="card-head"><div><div class="eyebrow">WORKFLOW</div><h2>任务计划</h2><p>{{ workflow.question }}</p></div><span class="status">{{ workflow.control_requested === 'cancel' ? '正在取消' : workflow.control_requested === 'pause' ? '正在暂停' : labels[workflow.status] || workflow.status }}</span></div><div v-for="task in workflow.tasks" :key="task.id" class="task"><div class="task-indicator" :class="task.status"></div><div class="task-body"><div class="task-top"><strong>{{ names[task.worker] || task.worker }}</strong><span>{{ labels[task.status] || task.status }}</span></div><p>{{ task.goal }}</p><small v-if="task.depends_on.length">依赖 {{ task.depends_on.join('、') }}</small><p v-if="task.error" class="error">{{ task.error }}</p><details v-if="task.result"><summary>查看结果</summary><pre>{{ task.result }}</pre></details></div></div><details v-if="workflow.trace?.length"><summary>查看执行追踪</summary><pre>{{ JSON.stringify(workflow.trace, null, 2) }}</pre></details><div v-if="workflow.error" class="error">{{ workflow.error }}</div><p v-if="workflow.status === 'awaiting_approval'" class="workflow-hint">计划已生成，请确认执行或取消计划。</p><p v-if="workflow.control_requested" class="workflow-hint">请求已收到，正在等待当前模型或工具调用结束。</p><div v-if="workflow.status !== 'completed' && workflow.status !== 'cancelled'" class="actions"><button class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('cancel')">{{ workflow.status === 'running' ? '取消任务' : '取消计划' }}</button><button v-if="workflow.status === 'running'" class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('pause')">暂停</button><button v-if="['awaiting_approval', 'paused', 'failed'].includes(workflow.status) && workflow.tasks.length" :disabled="busy || controlBusy" @click="act('resume')">{{ workflow.status === 'awaiting_approval' ? '确认并执行 →' : '继续执行 →' }}</button></div><div v-if="workflow.result" class="result"><div class="eyebrow">RESEARCH OUTPUT</div><h3>研究结果</h3><pre>{{ workflow.result }}</pre></div></div>
+    <div v-if="error" class="error">{{ error }}</div><div v-if="syncError" class="error">{{ syncError }}</div>
+    <div v-if="workflow" class="card"><div class="card-head"><div><div class="eyebrow">WORKFLOW</div><h2>任务计划</h2><p>{{ workflow.question }}</p></div><span class="status">{{ workflow.control_requested === 'cancel' ? '正在取消' : workflow.control_requested === 'pause' ? '正在暂停' : confirming && workflow.status === 'awaiting_approval' ? '正在提交执行请求' : labels[workflow.status] || workflow.status }}</span></div><div v-for="task in workflow.tasks" :key="task.id" class="task"><div class="task-indicator" :class="task.status"></div><div class="task-body"><div class="task-top"><strong>{{ names[task.worker] || task.worker }}</strong><span>{{ labels[task.status] || task.status }}</span></div><p>{{ task.goal }}</p><small v-if="task.depends_on.length">依赖 {{ task.depends_on.join('、') }}</small><p v-if="task.error" class="error">{{ task.error }}</p><details v-if="task.result"><summary>查看结果</summary><pre>{{ task.result }}</pre></details></div></div><details v-if="workflow.trace?.length"><summary>查看执行追踪</summary><pre>{{ JSON.stringify(workflow.trace, null, 2) }}</pre></details><div v-if="workflow.error" class="error">{{ workflow.error }}</div><p v-if="workflow.status === 'awaiting_approval' && !confirming" class="workflow-hint">计划已生成，请确认执行或取消计划。</p><p v-if="confirming && workflow.status === 'awaiting_approval'" class="workflow-hint">正在向后端提交执行请求，等待状态更新。</p><p v-if="workflow.control_requested" class="workflow-hint">请求已收到，正在等待当前模型或工具调用结束。</p><div v-if="workflow.status !== 'completed' && workflow.status !== 'cancelled'" class="actions"><button class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('cancel')">{{ workflow.status === 'running' ? '取消任务' : '取消计划' }}</button><button v-if="workflow.status === 'running'" class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('pause')">暂停</button><button v-if="['awaiting_approval', 'paused', 'failed'].includes(workflow.status) && workflow.tasks.length" :disabled="busy || controlBusy" @click="act('resume')">{{ workflow.status === 'awaiting_approval' ? '确认并执行 →' : '继续执行 →' }}</button></div><div v-if="workflow.result" class="result"><div class="eyebrow">RESEARCH OUTPUT</div><h3>研究结果</h3><pre>{{ workflow.result }}</pre></div></div>
   </section><aside class="right"><div class="card"><div class="eyebrow">AGENT TEAM</div><h2>研究团队</h2><p class="muted">每个角色负责不同的研究环节。</p><div v-for="(name, key) in names" :key="key" class="worker"><span class="worker-icon">✳</span><div><strong>{{ name }}</strong><small>{{ key }}</small></div></div></div><div class="note"><strong>会话与追踪</strong><p>执行计划和阶段结果保存在当前会话中。加载相同会话可继续查看。</p></div></aside></div></main></div>
 </template>

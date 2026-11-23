@@ -94,6 +94,11 @@ class Supervisor:
         try:
             state = self.store.load(user, session)
             def save():
+                workflow = state.get("workflow")
+                if workflow is not None:
+                    revision = state.get("workflow_revision", 0) + 1
+                    state["workflow_revision"] = revision
+                    workflow["revision"] = revision
                 self.store.save(user, session, state, lock)
             return action(state, save)
         finally:

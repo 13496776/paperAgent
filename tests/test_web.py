@@ -96,12 +96,19 @@ def test_pause_endpoint_works_during_running_request(tmp_path, monkeypatch):
     now = int(time.time())
     token = jwt.encode({"sub": "alice", "iss": "issuer", "aud": "app", "iat": now, "exp": now + 60}, key, algorithm="HS256")
     headers = {"Authorization": f"Bearer {token}"}
-    assert client.post("/api/sessions/demo/plan", json={"question": "Research?"}, headers=headers).status_code == 200
+    plan = client.post("/api/sessions/demo/plan", json={"question": "Research?"}, headers=headers)
+    assert plan.status_code == 200
+    initial_revision = plan.json()["revision"]
+    assert plan.json()["status"] == "awaiting_approval"
     responses = []
     thread = threading.Thread(target=lambda: responses.append(client.post("/api/sessions/demo/resume", json={}, headers=headers)))
     thread.start()
     try:
         assert entered.wait(5)
+        running = client.get("/api/sessions/demo", headers=headers).json()["workflow"]
+        assert running["status"] == "running"
+        assert running["tasks"][0]["status"] == "running"
+        assert running["revision"] > initial_revision
         pause = client.post("/api/sessions/demo/pause", headers=headers)
         assert pause.status_code == 200
         assert client.get("/api/sessions/demo", headers=headers).json()["workflow"]["control_requested"] == "pause"
@@ -110,3 +117,4 @@ def test_pause_endpoint_works_during_running_request(tmp_path, monkeypatch):
         thread.join(5)
     assert not thread.is_alive()
     assert responses[0].json()["status"] == "paused"
+    assert responses[0].json()["revision"] > initial_revision
