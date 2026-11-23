@@ -64,3 +64,49 @@ def test_local_sign_in_is_disabled_or_expired(monkeypatch):
     monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_CODE", "test-code")
     monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_EXPIRES", str(time.time() - 1))
     assert client.post("/api/local-session", json={"code": "test-code"}).status_code == 401
+
+
+def test_pause_endpoint_works_during_running_request(tmp_path, monkeypatch):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    key = "test-key-that-is-long-enough-for-hs256"
+    monkeypatch.setenv("CORECODER_JWT_KEY", key)
+    monkeypatch.setenv("CORECODER_JWT_ISSUER", "issuer")
+    monkeypatch.setenv("CORECODER_JWT_AUDIENCE", "app")
+
+    class BlockingModel:
+        def __init__(self):
+            self.count = 0
+
+        def chat(self, **kwargs):
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(content='{"tasks":[{"id":"a","worker":"analysis","goal":"review","depends_on":[]}]}')
+            entered.set()
+            assert release.wait(5)
+            return LLMResponse(content="Done")
+
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "test.sqlite")
+    instance = Supervisor(BlockingModel(), store)
+    monkeypatch.setattr(web, "get_store", lambda: store)
+    monkeypatch.setattr(web, "supervisor", lambda provider, user: instance)
+    client = TestClient(web.app)
+    now = int(time.time())
+    token = jwt.encode({"sub": "alice", "iss": "issuer", "aud": "app", "iat": now, "exp": now + 60}, key, algorithm="HS256")
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.post("/api/sessions/demo/plan", json={"question": "Research?"}, headers=headers).status_code == 200
+    responses = []
+    thread = threading.Thread(target=lambda: responses.append(client.post("/api/sessions/demo/resume", json={}, headers=headers)))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        pause = client.post("/api/sessions/demo/pause", headers=headers)
+        assert pause.status_code == 200
+        assert client.get("/api/sessions/demo", headers=headers).json()["workflow"]["control_requested"] == "pause"
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert responses[0].json()["status"] == "paused"

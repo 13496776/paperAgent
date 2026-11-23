@@ -13,6 +13,7 @@ import jwt
 import redis
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AuthenticationError, RateLimitError
 from pydantic import BaseModel, Field
 
 from .llm import LLM
@@ -118,6 +119,14 @@ def handle(call):
         return call()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=502, detail="模型服务认证失败，请检查所选提供商及 API Key") from exc
+    except RateLimitError as exc:
+        raise HTTPException(status_code=502, detail="模型服务限流或额度不足，请检查账户状态") from exc
+    except (APITimeoutError, APIConnectionError) as exc:
+        raise HTTPException(status_code=502, detail="无法连接模型服务或请求超时，请检查网络和服务地址") from exc
+    except APIStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"模型服务返回 HTTP {exc.status_code}，请检查模型配置") from exc
     except (RuntimeError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -162,7 +171,7 @@ def health():
 
 @app.get("/api/sessions/{session}")
 def get_session(session: str, user: str = Depends(current_user)):
-    return handle(lambda: get_store().load(user, session))
+    return handle(lambda: Supervisor(None, get_store()).get(user, session))
 
 
 @app.post("/api/sessions/{session}/plan")
@@ -173,6 +182,11 @@ def plan(session: str, request: PlanRequest, user: str = Depends(current_user)):
 @app.post("/api/sessions/{session}/resume")
 def resume(session: str, request: ResumeRequest, user: str = Depends(current_user)):
     return handle(lambda: supervisor(request.provider, user).resume(user, session))
+
+
+@app.post("/api/sessions/{session}/pause")
+def pause(session: str, user: str = Depends(current_user)):
+    return handle(lambda: Supervisor(None, get_store()).pause(user, session))
 
 
 @app.post("/api/sessions/{session}/cancel")

@@ -44,3 +44,174 @@ def test_supervisor_plan_approval_dependencies_and_tool_access(tmp_path):
 def test_reject_invalid_dependencies():
     with pytest.raises(ValueError):
         validate_plan({"tasks": [{"id": "a", "worker": "retrieval", "goal": "x", "depends_on": ["b"]}]})
+
+
+def test_pause_during_tool_call_and_resume_without_reexecution(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    class BlockingRetriever:
+        def retrieve(self, query):
+            calls.append(query)
+            entered.set()
+            assert release.wait(5)
+            return [{"id": "paper", "text": "evidence"}]
+
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
+    responses = [LLMResponse(content=json.dumps(plan)),
+                 LLMResponse(tool_calls=[ToolCall("c", "retrieve_chunks", {"query": "test"})]),
+                 LLMResponse(content="Done")]
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Scripted(responses), store, ResearchTools(BlockingRetriever()))
+    supervisor.start("alice", "session", "question")
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(supervisor.resume("alice", "session")))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        assert supervisor.pause("alice", "session")["control_requested"] == "pause"
+        assert supervisor.get("alice", "session")["workflow"]["control_requested"] == "pause"
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert outcome[0]["status"] == "paused"
+    result = supervisor.resume("alice", "session")
+    assert result["status"] == "completed"
+    assert calls == ["test"]
+    assert result["tasks"][0]["messages"][-2]["role"] == "tool"
+
+
+def test_cancel_while_model_call_is_running(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    plan = {"tasks": [{"id": "one", "worker": "analysis", "goal": "analyze", "depends_on": []}]}
+
+    class BlockingModel:
+        def __init__(self):
+            self.count = 0
+
+        def chat(self, **kwargs):
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(content=json.dumps(plan))
+            entered.set()
+            assert release.wait(5)
+            return LLMResponse(content="finished current request")
+
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(BlockingModel(), store)
+    supervisor.start("alice", "session", "question")
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(supervisor.resume("alice", "session")))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        assert supervisor.cancel("alice", "session")["control_requested"] == "cancel"
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert outcome[0]["status"] == "cancelled"
+
+
+def test_recover_tool_receipt_without_replaying():
+    assistant = LLMResponse(tool_calls=[ToolCall("one", "tool", {}), ToolCall("two", "tool", {})]).message
+    messages = [assistant]
+    task = {"calls": [{"id": "one", "status": "completed", "result": {"answer": 42}}]}
+    Supervisor._recover_tool_receipts(task, messages)
+    assert json.loads(messages[1]["content"]) == {"answer": 42}
+    assert "not executed" in messages[2]["content"]
+    Supervisor._recover_tool_receipts(task, messages)
+    assert len(messages) == 3
+
+
+def test_cancel_awaiting_plan_marks_pending_tasks(tmp_path):
+    plan = {"tasks": [{"id": "one", "worker": "analysis", "goal": "analyze", "depends_on": []}]}
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(plan))]), store)
+    supervisor.start("alice", "session", "question")
+    result = supervisor.cancel("alice", "session")
+    assert result["status"] == "cancelled"
+    assert result["tasks"][0]["status"] == "cancelled"
+
+
+def test_cancel_during_planning(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingModel:
+        def chat(self, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return LLMResponse(content='{"tasks": []}')
+
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(BlockingModel(), store)
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(supervisor.start("alice", "session", "question")))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        assert supervisor.cancel("alice", "session")["control_requested"] == "cancel"
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert outcome[0]["status"] == "cancelled"
+
+
+def test_pause_before_tool_execution_does_not_run_it(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    tool_calls = []
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
+
+    class BlockingModel:
+        def __init__(self):
+            self.count = 0
+            self.last_messages = []
+
+        def chat(self, messages, **kwargs):
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(content=json.dumps(plan))
+            if self.count == 2:
+                entered.set()
+                assert release.wait(5)
+                return LLMResponse(tool_calls=[ToolCall("c", "retrieve_chunks", {"query": "test"})])
+            self.last_messages = messages[:]
+            return LLMResponse(content="Noted")
+
+    class CountRetriever:
+        def retrieve(self, query):
+            tool_calls.append(query)
+            return []
+
+    model = BlockingModel()
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(model, store, ResearchTools(CountRetriever()))
+    supervisor.start("alice", "session", "question")
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(supervisor.resume("alice", "session")))
+    thread.start()
+    try:
+        assert entered.wait(5)
+        supervisor.pause("alice", "session")
+    finally:
+        release.set()
+        thread.join(5)
+    assert outcome[0]["status"] == "paused"
+    assert tool_calls == []
+    assert supervisor.resume("alice", "session")["status"] == "completed"
+    assert tool_calls == []
+    assert any("not executed" in (message.get("content") or "") for message in model.last_messages)
