@@ -61,7 +61,7 @@ def main():
         from .demo import run_demo
         raise SystemExit(run_demo())
 
-    config = Config.from_env()
+    config = Config.from_env(prefer_deepseek=not (args.model or args.api_key or args.base_url))
 
     # CLI args override env vars
     if args.model:

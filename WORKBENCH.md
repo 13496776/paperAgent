@@ -26,7 +26,7 @@ python run_paperagent.py --setup
 
 执行 `python run_paperagent.py`。首次运行会创建 `paperagent.config.json` 并提示编辑该文件。填写 `deepseek_api_key` 或 `openai_api_key`，以及 `embedding_model`、`reranker_model` 的本地路径或 Hugging Face 名称。JSON 中 Windows 路径使用正斜杠（例如 `D:/models/bge-m3`）或双反斜杠。配置文件包含密钥，已加入 `.gitignore`，请勿上传或分享。
 
-再次执行 `python run_paperagent.py`。脚本读取配置，生成本机 JWT，启动后端和前端，打开一次性本地登录链接并自动填入令牌。若浏览器未自动打开，可复制终端中的一次性链接；链接有效期为 10 分钟且只能使用一次。也可将终端中的备用令牌手动粘贴到“访问令牌”。模型提供商可在网页选择。Ctrl+C 停止脚本启动的服务。令牌有效期为 24 小时；每次启动默认生成新的签名密钥和令牌。
+再次执行 `python run_paperagent.py`。脚本读取配置，生成本机 JWT，启动后端和前端，打开一次性本地登录链接并自动填入令牌。若浏览器未自动打开，可复制终端中的一次性链接；链接有效期为 10 分钟且只能使用一次。也可将终端中的备用令牌手动粘贴到“访问令牌”。默认优先使用已配置的 DeepSeek；仅配置 OpenAI 时默认选择 OpenAI，也可在网页手动切换。Ctrl+C 停止脚本启动的服务。令牌有效期为 24 小时；每次启动默认生成新的签名密钥和令牌。
 
 脚本使用已有 Redis。如果默认地址的 Redis 未运行且 Docker 可用，会启动一个本地 Redis 容器并在退出时停止，数据保存在 Docker 卷 `paperagent-redis-data`。使用其他 Redis 地址时需要自行启动该服务。执行 `python run_paperagent.py --check` 可运行 Python 测试和前端构建。Linux 或 macOS 也可使用此脚本，虚拟环境使用 `source .venv/bin/activate` 激活。
 

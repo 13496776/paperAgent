@@ -27,13 +27,19 @@ security = HTTPBearer()
 _bootstrap_lock = threading.Lock()
 
 
+def default_provider() -> Literal["openai", "deepseek"]:
+    if os.environ.get("DEEPSEEK_API_KEY") or not os.environ.get("OPENAI_API_KEY"):
+        return "deepseek"
+    return "openai"
+
+
 class PlanRequest(BaseModel):
     question: str = Field(min_length=1, max_length=20000)
-    provider: Literal["openai", "deepseek"] = "openai"
+    provider: Literal["openai", "deepseek"] = Field(default_factory=default_provider)
 
 
 class ResumeRequest(BaseModel):
-    provider: Literal["openai", "deepseek"] = "openai"
+    provider: Literal["openai", "deepseek"] = Field(default_factory=default_provider)
 
 
 def current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
@@ -160,8 +166,7 @@ def local_session(request: LocalBootstrapRequest, response: Response):
 
 @app.get("/api/settings")
 def public_settings():
-    provider = "deepseek" if os.environ.get("DEEPSEEK_API_KEY") and not os.environ.get("OPENAI_API_KEY") else "openai"
-    return {"default_provider": provider}
+    return {"default_provider": default_provider()}
 
 
 @app.get("/api/health")

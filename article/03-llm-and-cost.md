@@ -185,7 +185,7 @@ Tokens: 12043 prompt + 3201 completion = 15244 total  (~$0.0621)
 
 ## 配置从哪来
 
-最后串一下 `config.py`（56 行）。它从环境变量读配置，带一个合理的优先级：
+最后串一下 `config.py`（61 行）。它从环境变量读配置，带一个合理的优先级：
 
 ```python
 api_key = (

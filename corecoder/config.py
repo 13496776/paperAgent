@@ -34,23 +34,28 @@ class Config:
     provider: str = "openai"
 
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls, prefer_deepseek: bool = True) -> "Config":
         # load .env if present (won't override existing env vars)
         _load_dotenv()
-        # pick up common env vars automatically
-        api_key = (
-            os.getenv("CORECODER_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or os.getenv("DEEPSEEK_API_KEY")
-            or ""
-        )
+        core_key = os.getenv("CORECODER_API_KEY")
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        provider = os.getenv("CORECODER_PROVIDER", "openai")
+        use_deepseek = bool(prefer_deepseek and deepseek_key and not core_key and provider != "litellm")
+        api_key = core_key or (deepseek_key if use_deepseek else os.getenv("OPENAI_API_KEY")) or deepseek_key or ""
+        if use_deepseek:
+            default_model = os.getenv("DEEPSEEK_MODEL") or "deepseek-chat"
+            base_url = (os.getenv("CORECODER_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL")
+                        or os.getenv("OPENAI_BASE_URL") or "https://api.deepseek.com")
+        else:
+            default_model = "gpt-5.5"
+            base_url = (os.getenv("OPENAI_BASE_URL") or os.getenv("CORECODER_BASE_URL")
+                        or (os.getenv("DEEPSEEK_BASE_URL") if not os.getenv("OPENAI_API_KEY") else None))
         return cls(
-            model=os.getenv("CORECODER_MODEL", "gpt-5.5"),
+            model=os.getenv("CORECODER_MODEL") or default_model,
             api_key=api_key,
-            base_url=(os.getenv("OPENAI_BASE_URL") or os.getenv("CORECODER_BASE_URL")
-                      or (os.getenv("DEEPSEEK_BASE_URL") if not os.getenv("OPENAI_API_KEY") else None)),
+            base_url=base_url,
             max_tokens=int(os.getenv("CORECODER_MAX_TOKENS", "4096")),
             temperature=float(os.getenv("CORECODER_TEMPERATURE", "0")),
             max_context_tokens=int(os.getenv("CORECODER_MAX_CONTEXT", "128000")),
-            provider=os.getenv("CORECODER_PROVIDER", "openai"),
+            provider=provider,
         )

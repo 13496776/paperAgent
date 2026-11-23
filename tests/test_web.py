@@ -118,3 +118,21 @@ def test_pause_endpoint_works_during_running_request(tmp_path, monkeypatch):
     assert not thread.is_alive()
     assert responses[0].json()["status"] == "paused"
     assert responses[0].json()["revision"] > initial_revision
+
+
+@pytest.mark.parametrize(("deepseek", "openai", "expected"), [
+    ("ds-key", "openai-key", "deepseek"),
+    ("ds-key", None, "deepseek"),
+    (None, "openai-key", "openai"),
+    (None, None, "deepseek"),
+])
+def test_default_provider(monkeypatch, deepseek, openai, expected):
+    for name, value in (("DEEPSEEK_API_KEY", deepseek), ("OPENAI_API_KEY", openai)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    assert TestClient(web.app).get("/api/settings").json()["default_provider"] == expected
+    assert web.PlanRequest(question="Research?").provider == expected
+    assert web.ResumeRequest().provider == expected
+    assert web.PlanRequest(question="Research?", provider="openai").provider == "openai"

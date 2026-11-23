@@ -44,3 +44,23 @@ def test_configured_rerank_threshold(monkeypatch):
     assert Retriever([chunk], Embedding(), Ranker()).retrieve("research") == []
     monkeypatch.setenv("PAPER_RERANK_THRESHOLD", "0.5")
     assert len(Retriever([chunk], Embedding(), Ranker()).retrieve("research")) == 1
+
+
+def test_cli_prefers_deepseek_and_preserves_explicit_overrides(monkeypatch):
+    from corecoder.config import Config
+
+    monkeypatch.setattr("corecoder.config._load_dotenv", lambda: None)
+    for name in ("CORECODER_API_KEY", "CORECODER_MODEL", "CORECODER_PROVIDER", "CORECODER_BASE_URL",
+                 "OPENAI_BASE_URL", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    config = Config.from_env()
+    assert (config.api_key, config.model, config.base_url) == ("deepseek-key", "deepseek-chat", "https://api.deepseek.com")
+    config = Config.from_env(prefer_deepseek=False)
+    assert (config.api_key, config.model) == ("openai-key", "gpt-5.5")
+    monkeypatch.setenv("CORECODER_API_KEY", "custom-key")
+    monkeypatch.setenv("CORECODER_MODEL", "custom-model")
+    monkeypatch.setenv("CORECODER_BASE_URL", "https://custom.example/v1")
+    config = Config.from_env()
+    assert (config.api_key, config.model, config.base_url) == ("custom-key", "custom-model", "https://custom.example/v1")
