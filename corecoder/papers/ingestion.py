@@ -1,22 +1,21 @@
 """Import user-provided and arXiv papers into per-user SQLite corpora."""
 import hashlib
 import io
-import json
 import re
-import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import httpx
 from pypdf import PdfReader
 
-from .corpus import chunks_for_paper
+from .storage import CorpusStore  # noqa: F401
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
 _ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}(?:v\d+)?\Z")
 
 
-def extract_pdf(data, filename, *, title="", authors="", source="", doi=""):
+def extract_pdf(data, filename, *, title="", authors="", source="", doi="", ccf_rank=None,
+                venue="", year=None, ccf_source="", ccf_version="", ccf_verified=False):
     if len(data) > MAX_PDF_BYTES:
         raise ValueError("PDF exceeds 20 MiB")
     if not data.startswith(b"%PDF-"):
@@ -31,44 +30,16 @@ def extract_pdf(data, filename, *, title="", authors="", source="", doi=""):
         raise
     except Exception as exc:
         raise ValueError("PDF could not be parsed") from exc
-    text = "\f".join(pages).strip()
-    if not text:
+    text = "\f".join(pages).strip(" \t\r\n")
+    if not any(page.strip() for page in pages):
         raise ValueError("PDF contains no extractable text; scanned PDFs require OCR")
     detected_doi = re.search(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", text, re.IGNORECASE)
     return {"id": hashlib.sha256(data).hexdigest(), "title": title.strip() or str(info.get("/Title") or "").strip()
             or Path(filename).stem, "authors": authors.strip() or str(info.get("/Author") or "").strip(),
             "source": source.strip() or filename, "doi": doi.strip() or (detected_doi.group().rstrip(".,;") if detected_doi else ""),
-            "text": text}
+            "page_count": len(pages), "ccf_rank": ccf_rank or None, "venue": venue.strip(), "year": year,
+            "ccf_source": ccf_source.strip(), "ccf_version": ccf_version.strip(), "ccf_verified": ccf_verified, "text": text}
 
-
-class CorpusStore:
-    def __init__(self, path):
-        self.path = str(path)
-        with sqlite3.connect(self.path) as db:
-            db.execute("CREATE TABLE IF NOT EXISTS paper_corpus (owner TEXT NOT NULL, id TEXT NOT NULL, "
-                       "metadata TEXT NOT NULL, chunks TEXT NOT NULL, PRIMARY KEY (owner, id))")
-
-    def add(self, owner, paper, encoder):
-        chunks = chunks_for_paper(paper, embedding_model=encoder)
-        if not chunks:
-            raise ValueError("paper contains no searchable text")
-        metadata = {key: paper[key] for key in ("id", "title", "authors", "source", "doi")}
-        with sqlite3.connect(self.path, timeout=30) as db:
-            cursor = db.execute("INSERT OR IGNORE INTO paper_corpus VALUES (?, ?, ?, ?)",
-                                (owner, paper["id"], json.dumps(metadata, ensure_ascii=False),
-                                 json.dumps(chunks, ensure_ascii=False)))
-            created = cursor.rowcount == 1
-        return {**metadata, "chunks": len(chunks), "created": created}
-
-    def papers(self, owner):
-        with sqlite3.connect(self.path) as db:
-            return [json.loads(row[0]) for row in db.execute(
-                "SELECT metadata FROM paper_corpus WHERE owner=? ORDER BY rowid DESC", (owner,))]
-
-    def chunks(self, owner):
-        with sqlite3.connect(self.path) as db:
-            return [chunk for row in db.execute("SELECT chunks FROM paper_corpus WHERE owner=?", (owner,))
-                    for chunk in json.loads(row[0])]
 
 
 def search_arxiv(query, client=None):

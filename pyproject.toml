@@ -42,7 +42,7 @@ packages = ["corecoder"]
 litellm = ["litellm>=1.60.0,<2.0.0"]
 web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "redis>=5,<7", "PyJWT>=2.8,<3", "pypdf>=5,<7", "python-multipart>=0.0.9", "httpx>=0.27,<1"]
 persistent = ["redis>=5,<7", "PyJWT>=2.8,<3"]
-papers = ["sentence-transformers>=3.0,<6"]
+papers = ["sentence-transformers>=3.0,<6", "chromadb>=1.0,<2"]
 dev = ["pytest>=7.0", "ruff>=0.9.0"]
 
 [project.scripts]

@@ -12,4 +12,4 @@
 
 `corecoder.papers.evaluation.evaluate` 接收标注结果列表，每项包含 `intent`、`expected_intent`、`query`、`expected_query`、`relevant_ids` 和 `retrieved_ids`，计算意图准确率、改写严格匹配率和有相关文档标注样本上的平均召回率。改写严格匹配仅衡量文本完全一致，需结合人工判断语义正确性。相关 ID 应与检索结果的分块 `id` 一致。
 
-Web 工作台还支持登录后上传文本型 PDF，或搜索并导入 arXiv 论文。PDF 解析、用户隔离和在线接入的说明见 [工作台说明](WORKBENCH.md)。
+Web 工作台还支持登录后上传文本型 PDF，或搜索并导入 arXiv 论文。Web 模式使用 SQLite 保存元数据和分块，并将向量持久化到 Chroma；上面的独立 CLI JSON 模式仍使用进程内向量索引。PDF 解析、迁移和在线接入的说明见 [工作台说明](WORKBENCH.md)。

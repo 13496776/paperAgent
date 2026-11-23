@@ -14,6 +14,7 @@ FIELDS = {
     "openai_base_url": "OPENAI_BASE_URL",
     "redis_url": "REDIS_URL",
     "sqlite_path": "CORECODER_SQLITE_PATH",
+    "chroma_path": "PAPER_CHROMA_PATH",
     "chunk_size": "PAPER_CHUNK_SIZE",
     "chunk_overlap": "PAPER_CHUNK_OVERLAP",
     "rerank_threshold": "PAPER_RERANK_THRESHOLD",

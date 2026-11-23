@@ -21,3 +21,5 @@ web/dist/
 *.sqlite3-shm
 *.sqlite3-wal
 paperagent.config.json
+paperagent-chroma/
+*-chroma/

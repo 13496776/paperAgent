@@ -69,25 +69,34 @@ class Retriever:
         similarity = [sum(float(a) * float(b) for a, b in zip(vector, item)) for item in self.vectors]
         rankings = [sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:candidates]
                     for scores in (lexical, similarity)]
-        if progress:
-            progress("fusion", "融合并去重候选片段")
-        fused = {}
-        for ranking in rankings:
-            for rank, index in enumerate(ranking, 1):
-                fused[index] = fused.get(index, 0) + 1 / (60 + rank)
-        indexes = sorted(fused, key=fused.get, reverse=True)
-        # Duplicate text may occur in overlapping or duplicated source documents.
-        seen = set()
-        unique = []
-        for index in indexes:
-            chunk = self.chunks[index]
-            key = (chunk.get("paper_id") or chunk.get("id"), " ".join(chunk["text"].split()).casefold())
-            if key not in seen:
-                seen.add(key)
-                unique.append(index)
-        if progress:
-            progress("rerank", f"重排 {len(unique)} 个候选片段")
-        scores = self.reranker.predict([(query, passage_text(self.chunks[i])) for i in unique],
-                                       activation_fn=lambda logits: logits.sigmoid())
-        ranked = sorted(zip(unique, scores), key=lambda pair: float(pair[1]), reverse=True)
-        return [{**self.chunks[i], "rrf_score": fused[i], "rerank_score": float(score)} for i, score in ranked if float(score) >= threshold][:limit]
+        ranked_lists = [[i for i in ranking] for ranking in rankings]
+        return fuse_and_rerank(query, ranked_lists, {i: c for i, c in enumerate(self.chunks)},
+                               self.reranker, limit, threshold, progress)
+
+
+def fuse_and_rerank(query, rankings, chunks, reranker, limit, threshold, progress=None):
+    if progress:
+        progress("fusion", "融合并去重候选片段")
+    fused = {}
+    for ranking in rankings:
+        for rank, ident in enumerate(ranking, 1):
+            if ident in chunks:
+                fused[ident] = fused.get(ident, 0) + 1 / (60 + rank)
+    indexes = sorted(fused, key=fused.get, reverse=True)
+    seen = set()
+    unique = []
+    for index in indexes:
+        chunk = chunks[index]
+        key = (chunk.get("paper_id") or chunk.get("id"), " ".join(chunk["text"].split()).casefold())
+        if key not in seen:
+            seen.add(key)
+            unique.append(index)
+    if not unique:
+        return []
+    if progress:
+        progress("rerank", f"重排 {len(unique)} 个候选片段")
+    scores = reranker.predict([(query, passage_text(chunks[i])) for i in unique],
+                              activation_fn=lambda logits: logits.sigmoid())
+    ranked = sorted(zip(unique, scores), key=lambda pair: float(pair[1]), reverse=True)
+    return [{**chunks[i], "rrf_score": fused[i], "rerank_score": float(score)}
+            for i, score in ranked if float(score) >= threshold][:limit]

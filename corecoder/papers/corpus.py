@@ -16,7 +16,7 @@ def load_embedding_model():
     return SentenceTransformer(os.environ.get("PAPER_EMBED_MODEL", DEFAULT_EMBED_MODEL))
 
 
-def remove_page_margins(text):
+def remove_page_margins(text, preserve_pages=False):
     """Remove repeated first/last lines on form-feed-delimited pages."""
     pages = text.split("\f")
     if len(pages) < 2:
@@ -41,7 +41,7 @@ def remove_page_margins(text):
                 continue
             kept.append(line)
         cleaned.append("\n".join(kept))
-    return "\n\n".join(cleaned)
+    return ("\f" if preserve_pages else "\n\n").join(cleaned)
 
 
 def _section_chunks(section, encoder, size, overlap):
@@ -79,27 +79,32 @@ def chunks_for_paper(paper, size=None, overlap=None, embedding_model=None):
         overlap = int(os.environ.get("PAPER_CHUNK_OVERLAP", "50"))
     if size <= 0 or not 0 <= overlap < size:
         raise ValueError("overlap must be nonnegative and smaller than size")
-    text = remove_page_margins(paper.get("text", "")).strip()
+    text = remove_page_margins(paper.get("text", ""), preserve_pages=True).strip(" \t\r\n")
     if not text or not paper.get("title"):
         raise ValueError("each paper requires title and text")
     metadata = {key: paper.get(key, "") for key in ("title", "authors", "source", "doi")}
     identity = paper.get("id") or hashlib.sha256(
         (str(metadata["doi"]) + text).encode("utf-8")
     ).hexdigest()
-    sections = re.split(r"(?m)^(#{1,6})[ \t]+(.+?)\s*$", text)
     headings = []
     result = []
-    for i in range(0, len(sections), 3):
-        if i:
-            level = len(sections[i - 2])
-            headings = headings[:level - 1]
-            headings.append(sections[i - 1].strip())
-        heading = " > ".join(headings)
-        section = sections[i].strip()
-        for offset, body in _section_chunks(section, embedding_model, size, overlap):
-            if body:
-                chunk_id = hashlib.sha256(f"{identity}:{heading}:{offset}:{body}".encode()).hexdigest()[:20]
-                result.append({"id": chunk_id, "paper_id": identity, "section": heading, "text": body, **metadata})
+    pages = text.split("\f")
+    has_pages = bool(paper.get("page_count"))
+    for page_number, page in enumerate(pages, 1):
+        sections = re.split(r"(?m)^(#{1,6})[ \t]+(.+?)\s*$", page)
+        for i in range(0, len(sections), 3):
+            if i:
+                level = len(sections[i - 2])
+                headings = headings[:level - 1]
+                headings.append(sections[i - 1].strip())
+            heading = " > ".join(headings)
+            section = sections[i].strip()
+            for offset, body in _section_chunks(section, embedding_model, size, overlap):
+                if body:
+                    chunk_id = hashlib.sha256(f"{identity}:{page_number}:{heading}:{offset}:{body}".encode()).hexdigest()[:20]
+                    result.append({"id": chunk_id, "paper_id": identity, "section": heading, "text": body,
+                                   "page_start": page_number if has_pages else None,
+                                   "page_end": page_number if has_pages else None, **metadata})
     return result
 
 

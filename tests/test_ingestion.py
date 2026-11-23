@@ -4,6 +4,7 @@ import time
 import pytest
 
 pytest.importorskip("pypdf")
+pytest.importorskip("chromadb")
 pytest.importorskip("fastapi")
 jwt = pytest.importorskip("jwt")
 pytest.importorskip("redis")
@@ -76,13 +77,19 @@ def test_authenticated_upload_and_list(tmp_path, monkeypatch):
                            key, algorithm="HS256")
         return {"Authorization": "Bearer " + token}
     response = client.post("/api/corpus/upload", files={"file": ("paper.pdf", make_pdf(), "application/pdf")},
-                           headers=auth("alice"))
+                           data={"ccf_rank": "A"}, headers=auth("alice"))
     assert response.status_code == 200, response.text
     assert response.json()["chunks"] == 1
+    assert response.json()["ccf_rank"] == "A"
+    assert response.json()["page_count"] == 1
+    paper_id = response.json()["id"]
     assert len(client.get("/api/corpus", headers=auth("alice")).json()) == 1
     assert client.get("/api/corpus", headers=auth("bob")).json() == []
     assert web.UserRetriever("alice").retrieve("retrieval")[0]["title"] == "Research Paper"
     assert web.UserRetriever("bob").retrieve("retrieval") == []
+    assert client.delete(f"/api/corpus/{paper_id}", headers=auth("bob")).status_code == 404
+    assert client.delete(f"/api/corpus/{paper_id}", headers=auth("alice")).status_code == 200
+    assert web.UserRetriever("alice").retrieve("retrieval") == []
     assert client.get("/api/corpus").status_code in (401, 403)
 
 
@@ -133,14 +140,14 @@ def test_inventory_and_retriever_cache_with_corpus_updates(tmp_path, monkeypatch
                             "authors": "", "source": "", "doi": ""}, embedding)
     retriever = web.UserRetriever("alice")
     assert retriever.list_papers()["count"] == 3
-    assert embedding.batches == []
+    assert embedding.batches == [1, 1, 1]
     assert len(retriever.retrieve("retrieval")) == 3
     assert len(retriever.retrieve("retrieval")) == 3
-    assert embedding.batches == [3, 1, 1]
+    assert embedding.batches == [1, 1, 1, 1, 1]
     store.add("alice", {"id": "3", "title": "Paper 3", "text": "retrieval 3", "authors": "", "source": "", "doi": ""}, embedding)
     assert retriever.list_papers()["count"] == 4
     assert len(retriever.retrieve("retrieval")) == 4
-    assert embedding.batches[-2:] == [4, 1]
+    assert embedding.batches[-2:] == [1, 1]
     assert web.UserRetriever("bob").list_papers()["count"] == 0
 
 
@@ -201,7 +208,7 @@ def test_rag_workflow_with_real_retrieval_components_and_mocked_models(tmp_path,
     assert result["status"] == "completed"
     assert "Retrieval paper" in result["result"]
     stages = [event["stage"] for event in result["tasks"][0]["activities"]]
-    assert all(stage in stages for stage in ("model", "corpus_load", "index_build", "bm25", "query_embedding", "rerank"))
+    assert all(stage in stages for stage in ("model", "corpus_load", "bm25", "query_embedding", "vector_search", "rerank"))
 
 
 def test_rag_uses_openai_compatible_streaming_and_tool_results(tmp_path, monkeypatch):
@@ -273,3 +280,19 @@ def test_rag_uses_openai_compatible_streaming_and_tool_results(tmp_path, monkeyp
         server.shutdown()
         server.server_close()
         thread.join(5)
+
+
+def test_deleted_paper_is_not_returned_by_inflight_rerank(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "race.sqlite"))
+    monkeypatch.delenv("PAPER_CORPUS_PATH", raising=False)
+    encoder = Embedding()
+    store = web.corpus_store()
+    store.add("alice", {"id": "p1", "title": "Paper", "text": "retrieval evidence", "authors": "", "source": "", "doi": ""}, encoder)
+
+    class DeletingReranker:
+        def predict(self, pairs, activation_fn):
+            assert store.delete("alice", "p1")
+            return [0.9 for _ in pairs]
+
+    monkeypatch.setattr(web, "get_models", lambda: (encoder, DeletingReranker()))
+    assert web.UserRetriever("alice").retrieve("retrieval") == []

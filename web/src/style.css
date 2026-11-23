@@ -6,3 +6,5 @@
 .workflow-hint{font-size:12px;color:#647e70;line-height:1.6}
 
 .activity-current,.activity-row{font-size:12px;color:#52715f;line-height:1.7}.activity-row{padding:3px 0}
+
+.metadata-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0}.metadata-fields .checkbox{display:flex;align-items:center;gap:8px}.metadata-fields .checkbox input{height:auto}

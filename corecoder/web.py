@@ -1,12 +1,10 @@
 """FastAPI interface for authenticated research workflows."""
-import hashlib
 import hmac
 import json
 import math
 import os
 import threading
 import time
-from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
@@ -74,7 +72,7 @@ def get_models():
 
 
 def corpus_store():
-    from .papers.ingestion import CorpusStore
+    from .papers.storage import CorpusStore
 
     return CorpusStore(os.environ.get("CORECODER_SQLITE_PATH", "corecoder-memory.sqlite3"))
 
@@ -85,8 +83,7 @@ def import_arxiv(user, ident):
     return corpus_store().add(user, get_arxiv_paper(ident), get_models()[0])
 
 
-_retriever_cache = OrderedDict()
-_retriever_cache_lock = threading.Lock()
+_shared_index_lock = threading.Lock()
 
 
 class UserRetriever:
@@ -111,40 +108,55 @@ class UserRetriever:
         return self.retrieve_with_progress(query)
 
     def retrieve_with_progress(self, query, progress=None):
-        from .papers.retrieval import Retriever
+        from .papers.retrieval import bm25, fuse_and_rerank
 
+        limit = int(os.environ.get("PAPER_RETRIEVAL_LIMIT", "5"))
+        candidates = int(os.environ.get("PAPER_RETRIEVAL_CANDIDATES", "30"))
+        threshold = float(os.environ.get("PAPER_RERANK_THRESHOLD", "0.3"))
+        if limit < 1 or candidates < 1 or not 0 <= threshold <= 1:
+            raise ValueError("retrieval limits must be positive and rerank threshold must be between 0 and 1")
         if progress:
-            progress("corpus_load", "读取本地论文分块")
-        chunks = corpus_store().chunks(self.user)
+            progress("corpus_load", "读取论文元数据")
+        store = corpus_store()
+        papers = store.papers(self.user)
         index = os.environ.get("PAPER_CORPUS_PATH")
-        if index:
-            chunks.extend(json.loads(Path(index).read_text(encoding="utf-8")))
-        if not chunks:
+        shared = json.loads(Path(index).read_text(encoding="utf-8")) if index else []
+        if not papers and not shared:
             return []
         if progress:
             progress("model_loading", "加载或复用嵌入模型和重排模型")
         embedding, reranker = get_models()
-        fingerprint = hashlib.sha256(json.dumps(chunks, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-        key = (self.user, fingerprint, id(embedding), id(reranker))
+        store.ensure_indexed(self.user, embedding, progress=progress)
         if progress:
-            progress("index_wait", "检查或等待向量索引")
-        with _retriever_cache_lock:
-            retriever = _retriever_cache.get(key)
-            if retriever is None:
-                if progress:
-                    progress("index_build", f"构建向量索引，编码 {len(chunks)} 个分块")
-                retriever = Retriever(chunks, embedding, reranker)
-                for old_key in list(_retriever_cache):
-                    if old_key[0] == self.user:
-                        del _retriever_cache[old_key]
-                _retriever_cache[key] = retriever
-                while len(_retriever_cache) > 16:
-                    _retriever_cache.popitem(last=False)
-            else:
-                _retriever_cache.move_to_end(key)
-                if progress:
-                    progress("index_cache", f"复用已构建的向量索引，包含 {len(chunks)} 个分块")
-        return retriever.retrieve(query, progress=progress)
+            progress("query_embedding", "编码查询向量")
+        vector = embedding.encode([query], normalize_embeddings=True)[0]
+        if progress:
+            progress("bm25", "SQLite 关键词检索")
+        lexical = store.lexical_search(self.user, query, candidates)
+        if progress:
+            progress("vector_search", "Chroma 向量检索")
+        dense = store.vector_search(self.user, vector, candidates)
+        keys = list(dict.fromkeys(lexical + dense))
+        personal = store.chunks_for_keys(self.user, keys)
+        ranked_lists = [[("personal", *item) for item in lexical], [("personal", *item) for item in dense]]
+        chunks = {("personal", *key): {**chunk, "_scope": "personal"} for key, chunk in personal.items()}
+        # Shared JSON corpora retain their file-backed metadata and use a persistent Chroma index.
+        if shared:
+            if progress:
+                progress("bm25_shared", "共享语料关键词检索")
+            scores = bm25(query, shared)
+            shared_lex = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:candidates]
+            if progress:
+                progress("index_wait", "检查或等待共享语料向量索引")
+            with _shared_index_lock:
+                shared_dense = store.shared_vector_search(shared, vector, embedding, candidates, progress)
+            ranked_lists.extend([[('shared', i) for i in shared_lex], [('shared', i) for i in shared_dense]])
+            chunks.update({('shared', i): {**shared[i], "_scope": "shared"} for i in set(shared_lex + shared_dense)})
+        results = fuse_and_rerank(query, ranked_lists, chunks, reranker, limit, threshold, progress)
+        personal_keys = [(chunk["paper_id"], chunk["id"]) for chunk in results if chunk.get("_scope") == "personal"]
+        still_available = store.chunks_for_keys(self.user, personal_keys)
+        return [{key: value for key, value in chunk.items() if key != "_scope"} for chunk in results
+                if chunk.get("_scope") != "personal" or (chunk["paper_id"], chunk["id"]) in still_available]
 
 
 def get_tools(user):
@@ -266,12 +278,16 @@ def list_papers(user: str = Depends(current_user)):
 
 @app.post("/api/corpus/upload")
 def upload_paper(file: Annotated[UploadFile, File()], title: str = Form(""), authors: str = Form(""),
-                 doi: str = Form(""), source: str = Form(""), user: str = Depends(current_user)):
+                 doi: str = Form(""), source: str = Form(""), ccf_rank: str = Form(""), venue: str = Form(""),
+                 year: int | None = Form(None), ccf_source: str = Form(""), ccf_version: str = Form(""),
+                 ccf_verified: bool = Form(False), user: str = Depends(current_user)):
     from .papers.ingestion import MAX_PDF_BYTES, extract_pdf
 
     def ingest():
         data = file.file.read(MAX_PDF_BYTES + 1)
-        paper = extract_pdf(data, file.filename or "paper.pdf", title=title, authors=authors, doi=doi, source=source)
+        paper = extract_pdf(data, file.filename or "paper.pdf", title=title, authors=authors, doi=doi,
+                            source=source, ccf_rank=ccf_rank or None, venue=venue, year=year,
+                            ccf_source=ccf_source, ccf_version=ccf_version, ccf_verified=ccf_verified)
         return corpus_store().add(user, paper, get_models()[0])
     return handle(ingest)
 
@@ -286,3 +302,12 @@ def search_papers(request: ArxivSearchRequest, user: str = Depends(current_user)
 @app.post("/api/corpus/import")
 def import_paper(request: ArxivImportRequest, user: str = Depends(current_user)):
     return handle(lambda: import_arxiv(user, request.id))
+
+
+@app.delete("/api/corpus/{paper_id}")
+def delete_paper(paper_id: str, user: str = Depends(current_user)):
+    def remove():
+        if not corpus_store().delete(user, paper_id):
+            raise HTTPException(status_code=404, detail="论文不存在")
+        return {"deleted": True}
+    return handle(remove)
