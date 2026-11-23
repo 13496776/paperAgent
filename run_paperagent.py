@@ -143,17 +143,22 @@ def main():
         token = jwt.encode({"sub": "local-user", "iss": os.environ["CORECODER_JWT_ISSUER"],
                             "aud": os.environ["CORECODER_JWT_AUDIENCE"], "iat": now, "exp": now + 86400},
                            os.environ["CORECODER_JWT_KEY"], algorithm="HS256")
+        bootstrap_code = secrets.token_urlsafe(32)
+        os.environ["PAPER_LOCAL_BOOTSTRAP_CODE"] = bootstrap_code
+        os.environ["PAPER_LOCAL_BOOTSTRAP_EXPIRES"] = str(time.time() + 600)
         backend = subprocess.Popen([sys.executable, "-m", "uvicorn", "corecoder.web:app", "--host", "127.0.0.1",
                                     "--port", "8000"], cwd=ROOT)
         wait_for_http("http://127.0.0.1:8000/api/health", backend)
         frontend = subprocess.Popen([node, str(vite), "--host", "127.0.0.1", "--port", "5173", "--strictPort"],
                                     cwd=ROOT / "web")
         wait_for_http("http://127.0.0.1:5173/", frontend)
-        print("\nPaperAgent: http://127.0.0.1:5173", flush=True)
-        print("Paste this local test token into the access token field:", flush=True)
+        login_url = "http://127.0.0.1:5173/#local-session=" + bootstrap_code
+        print("\nPaperAgent one-time sign-in link (valid for 10 minutes):", flush=True)
+        print(login_url, flush=True)
+        print("Alternatively, paste this local test token into the access token field:", flush=True)
         print(token, flush=True)
         print("Select the provider matching your API key. Press Ctrl+C to stop.", flush=True)
-        webbrowser.open("http://127.0.0.1:5173/")
+        webbrowser.open(login_url)
         while backend.poll() is None and frontend.poll() is None:
             time.sleep(0.5)
         raise RuntimeError("A service exited unexpectedly")

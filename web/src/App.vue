@@ -5,14 +5,6 @@ type Workflow = { question: string; status: string; tasks: Task[]; result?: stri
 const token = ref('')
 const session = ref(crypto.randomUUID())
 const provider = ref('openai')
-onMounted(async () => {
-  try {
-    const response = await fetch('/api/settings')
-    if (response.ok) provider.value = (await response.json()).default_provider
-  } catch {
-    // The model selector remains available if the backend is temporarily unavailable.
-  }
-})
 const question = ref('')
 const workflow = ref<Workflow | null>(null)
 const error = ref('')
@@ -23,12 +15,42 @@ const searchQuery = ref('')
 const papers = ref<{id: string; title: string; source: string}[]>([])
 const results = ref<{id: string; title: string; authors: string[]; abstract: string}[]>([])
 const notice = ref('')
+onMounted(async () => {
+  try {
+    token.value = sessionStorage.getItem('paperagent_token') || ''
+  } catch {
+    // The token can still be entered manually if browser storage is unavailable.
+  }
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  const code = params.get('local-session')
+  if (code) {
+    token.value = ''
+    try { sessionStorage.removeItem('paperagent_token') } catch { /* Storage is optional. */ }
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+    try {
+      const response = await fetch('/api/local-session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+      })
+      if (!response.ok) throw new Error('本地登录链接已失效，请重新启动程序或手动粘贴终端中的令牌。')
+      token.value = (await response.json()).token
+      try { sessionStorage.setItem('paperagent_token', token.value) } catch { /* Manual entry remains available. */ }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '本地登录失败，请检查后端是否启动。'
+    }
+  }
+  try {
+    const response = await fetch('/api/settings')
+    if (response.ok) provider.value = (await response.json()).default_provider
+  } catch {
+    // The model selector remains available if the backend is temporarily unavailable.
+  }
+})
 async function corpusRequest(path: string, body?: BodyInit, contentType?: string) {
   const headers: Record<string, string> = { Authorization: `Bearer ${token.value}` }
   if (contentType) headers['Content-Type'] = contentType
   const response = await fetch(`/api/corpus${path}`, { method: body ? 'POST' : 'GET', headers, body })
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || '请求失败')
+  if (!response.ok) throw new Error(response.status === 401 ? '访问令牌无效或已过期，请重新启动程序或粘贴有效令牌。' : data.detail || '请求失败')
   return data
 }
 async function corpusAction(action: 'load' | 'upload' | 'search' | 'import', id = '') {
@@ -59,7 +81,7 @@ async function request(path: string, body?: object) {
     method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
   })
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || '请求失败')
+  if (!response.ok) throw new Error(response.status === 401 ? '访问令牌无效或已过期，请重新启动程序或粘贴有效令牌。' : data.detail || '请求失败')
   return data
 }
 async function act(action: 'plan' | 'resume' | 'cancel' | 'load') {
@@ -77,7 +99,7 @@ async function act(action: 'plan' | 'resume' | 'cancel' | 'load') {
   <div class="layout"><aside class="sidebar"><div class="brand"><span class="mark">P</span><div>Paper Lab<small>RESEARCH WORKSPACE</small></div></div><div class="side-label">工作空间</div><div class="nav">◫ &nbsp; 研究工作台</div><div class="side-bottom">● &nbsp; 本地研究环境</div></aside>
   <main><header><div><div class="eyebrow">RESEARCH WORKSPACE</div><h1>研究工作台</h1><p>规划研究任务，追踪证据与执行进度。</p></div><span class="header-tag">SUPERVISOR / WORKERS</span></header>
   <div class="workspace"><section class="primary">
-    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用访问令牌加载或创建研究会话。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off"></label><label>会话 ID<input v-model="session"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
+    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off"></label><label>会话 ID<input v-model="session"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
     <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块，或检索并导入 arXiv 论文。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
       <div class="corpus-row"><input type="file" accept="application/pdf,.pdf" @change="choosePdf"><button :disabled="corpusBusy || !token || !pdf" @click="corpusAction('upload')">上传并建库</button></div>
       <div class="corpus-row"><input v-model="searchQuery" placeholder="搜索 arXiv 论文"><button class="secondary" :disabled="corpusBusy || !token || !searchQuery.trim()" @click="corpusAction('search')">在线检索</button></div>

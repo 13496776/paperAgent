@@ -1,6 +1,9 @@
 """FastAPI interface for authenticated research workflows."""
+import hmac
 import json
 import os
+import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
@@ -8,7 +11,7 @@ from typing import Annotated, Literal
 import httpx
 import jwt
 import redis
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -20,6 +23,7 @@ from .workflow.engine import ResearchTools, Supervisor
 apply_runtime_config()
 app = FastAPI(title="Paper Research Agent")
 security = HTTPBearer()
+_bootstrap_lock = threading.Lock()
 
 
 class PlanRequest(BaseModel):
@@ -116,6 +120,33 @@ def handle(call):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+class LocalBootstrapRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=256)
+
+
+@app.post("/api/local-session")
+def local_session(request: LocalBootstrapRequest, response: Response):
+    # The launcher supplies a high-entropy, short-lived, one-use code only to
+    # the loopback-bound development server and the browser URL fragment.
+    with _bootstrap_lock:
+        expected = os.environ.get("PAPER_LOCAL_BOOTSTRAP_CODE")
+        expires = os.environ.get("PAPER_LOCAL_BOOTSTRAP_EXPIRES", "0")
+        try:
+            valid = expected and hmac.compare_digest(request.code.encode("utf-8"), expected.encode("utf-8")) and time.time() < float(expires)
+        except ValueError:
+            valid = False
+        if not valid:
+            raise HTTPException(status_code=401, detail="Local sign-in link is invalid or expired")
+        now = int(time.time())
+        token = jwt.encode({"sub": "local-user", "iss": os.environ["CORECODER_JWT_ISSUER"],
+                            "aud": os.environ["CORECODER_JWT_AUDIENCE"], "iat": now, "exp": now + 86400},
+                           os.environ["CORECODER_JWT_KEY"], algorithm="HS256")
+        os.environ.pop("PAPER_LOCAL_BOOTSTRAP_CODE", None)
+        os.environ.pop("PAPER_LOCAL_BOOTSTRAP_EXPIRES", None)
+    response.headers["Cache-Control"] = "no-store"
+    return {"token": token}
 
 
 @app.get("/api/settings")

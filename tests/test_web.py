@@ -36,3 +36,31 @@ def test_authenticated_session_plan(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "awaiting_approval"
     assert client.get("/api/sessions/demo", headers=headers).json()["workflow"]["question"] == "Research?"
+
+
+def test_local_sign_in_is_one_use_and_produces_valid_jwt(monkeypatch):
+    key = "test-key-that-is-long-enough-for-hs256"
+    monkeypatch.setenv("CORECODER_JWT_KEY", key)
+    monkeypatch.setenv("CORECODER_JWT_ISSUER", "issuer")
+    monkeypatch.setenv("CORECODER_JWT_AUDIENCE", "app")
+    monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_CODE", "test-code")
+    monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_EXPIRES", str(time.time() + 60))
+    client = TestClient(web.app)
+    assert client.post("/api/local-session", json={"code": "bad"}).status_code == 401
+    assert client.post("/api/local-session", json={"code": "无效"}).status_code == 401
+    response = client.post("/api/local-session", json={"code": "test-code"})
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    claims = jwt.decode(response.json()["token"], key, algorithms=["HS256"], audience="app", issuer="issuer")
+    assert claims["sub"] == "local-user"
+    assert client.post("/api/local-session", json={"code": "test-code"}).status_code == 401
+
+
+def test_local_sign_in_is_disabled_or_expired(monkeypatch):
+    monkeypatch.delenv("PAPER_LOCAL_BOOTSTRAP_CODE", raising=False)
+    monkeypatch.delenv("PAPER_LOCAL_BOOTSTRAP_EXPIRES", raising=False)
+    client = TestClient(web.app)
+    assert client.post("/api/local-session", json={"code": "test-code"}).status_code == 401
+    monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_CODE", "test-code")
+    monkeypatch.setenv("PAPER_LOCAL_BOOTSTRAP_EXPIRES", str(time.time() - 1))
+    assert client.post("/api/local-session", json={"code": "test-code"}).status_code == 401
