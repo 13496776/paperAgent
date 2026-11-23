@@ -187,6 +187,14 @@ def test_yes_flag_parses(monkeypatch):
     assert _parse_args().yes
 
 
+def test_generic_single_agent_cli_is_disabled(monkeypatch):
+    import pytest
+    from corecoder.cli import main
+    monkeypatch.setattr("sys.argv", ["corecoder", "--yes"])
+    with pytest.raises(SystemExit, match="单 Agent 入口已停用"):
+        main()
+
+
 def test_ask_prompt_maps_answers(monkeypatch):
     from corecoder import cli
     answers = iter(["y", "a", "n", "garbage"])

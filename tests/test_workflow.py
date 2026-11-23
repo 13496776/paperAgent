@@ -46,6 +46,65 @@ def test_reject_invalid_dependencies():
         validate_plan({"tasks": [{"id": "a", "worker": "retrieval", "goal": "x", "depends_on": ["b"]}]})
 
 
+def test_tool_budgets_are_workflow_wide_and_survive_resume(tmp_path):
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
+    calls = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(11)]
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=calls),
+                                    LLMResponse(tool_calls=[ToolCall("again", "retrieve_chunks", {"query": "x"})])]),
+                            store, ResearchTools(Retriever()))
+    supervisor.start("alice", "session", "question")
+    with pytest.raises(RuntimeError, match="10"):
+        supervisor.resume("alice", "session")
+    workflow = supervisor.get("alice", "session")["workflow"]
+    assert workflow["status"] == "failed" and len(workflow["tasks"][0]["calls"]) == 10
+    with pytest.raises(RuntimeError, match="10"):
+        supervisor.resume("alice", "session")
+    assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 10
+
+
+def test_total_tool_budget_and_final_model_decision(tmp_path):
+    class Tools:
+        def schemas(self, worker):
+            return []
+        def execute(self, worker, name, args, progress=None):
+            return "ok"
+
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
+    calls = [ToolCall(str(i), f"tool{i // 10}", {}) for i in range(50)]
+    for extra in (False, True):
+        store = SessionStore(fakeredis.FakeRedis(), tmp_path / f"memory-{extra}.sqlite")
+        final = LLMResponse(tool_calls=[ToolCall("51", "tool5", {})]) if extra else LLMResponse(content="done")
+        supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=calls), final]),
+                                store, Tools())
+        supervisor.start("alice", "session", "question")
+        if extra:
+            with pytest.raises(RuntimeError, match="50"):
+                supervisor.resume("alice", "session")
+        else:
+            assert supervisor.resume("alice", "session")["result"] == "done"
+        assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 50
+
+
+def test_failed_tool_calls_count_across_tasks_and_show_error(tmp_path):
+    class FailingRetriever:
+        def retrieve(self, query):
+            raise TimeoutError()
+
+    plan = {"tasks": [{"id": str(i), "worker": "retrieval", "goal": "search", "depends_on": []} for i in range(2)]}
+    first = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(10)]
+    responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=first), LLMResponse(content="failed"),
+                 LLMResponse(tool_calls=[ToolCall("11", "retrieve_chunks", {"query": "test"})])]
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Scripted(responses), store, ResearchTools(FailingRetriever()))
+    supervisor.start("alice", "session", "question")
+    with pytest.raises(RuntimeError, match="10"):
+        supervisor.resume("alice", "session")
+    workflow = supervisor.get("alice", "session")["workflow"]
+    assert workflow["tasks"][0]["calls"][0]["error"] == "TimeoutError"
+    assert workflow["tasks"][1]["status"] == "failed" and "10" in workflow["error"]
+
+
 def test_pause_during_tool_call_and_resume_without_reexecution(tmp_path):
     import threading
 

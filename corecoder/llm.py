@@ -10,6 +10,7 @@ single unified interface. Set CORECODER_PROVIDER=litellm.
 """
 
 import json
+import random
 import threading
 import time
 from dataclasses import dataclass, field
@@ -210,7 +211,7 @@ class LLM:
             # on_token already showed is simply regenerated. Create-time
             # transients stay inside _call_with_retry and do not land here.
             if attempt < 2:
-                time.sleep(2**attempt)
+                time.sleep(2**attempt + random.uniform(0, 1))
         raise last_err
 
     def _drain(self, stream, on_token, on_reasoning) -> LLMResponse:
@@ -300,13 +301,13 @@ class LLM:
             except (RateLimitError, APITimeoutError, APIConnectionError):
                 if attempt == max_retries - 1:
                     raise
-                wait = 2 ** attempt
+                wait = 2 ** attempt + random.uniform(0, 1)
                 time.sleep(wait)
             except APIError as e:
                 # retry 5xx server errors but not 4xx; base APIError has no status_code so read it defensively
                 status_code = getattr(e, "status_code", None)
                 if status_code and status_code >= 500 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2 ** attempt + random.uniform(0, 1))
                 else:
                     raise
 
@@ -361,6 +362,6 @@ class LiteLLM(LLM):
                 )
                 is_server = any(kw in err for kw in ["500", "502", "503", "504"])
                 if (is_transient or is_server) and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2 ** attempt + random.uniform(0, 1))
                 else:
                     raise

@@ -12,6 +12,12 @@ WORKERS = {
     "delivery": "综合证据，撰写并修订带引用的研究成果",
     "evaluation": "评估结果、计算指标和审查链路",
 }
+MAX_WORKFLOW_TOOL_CALLS = 50
+MAX_PER_TOOL_CALLS = 10
+
+
+def error_message(exc):
+    return str(exc).strip() or type(exc).__name__
 
 
 def parse_json(content):
@@ -147,7 +153,7 @@ class Supervisor:
             except Exception as exc:
                 if self._apply_control(user, session, workflow, save):
                     return workflow
-                workflow.update(status="failed", error=str(exc))
+                workflow.update(status="failed", error=error_message(exc))
                 save()
                 raise
             save()
@@ -311,7 +317,8 @@ class Supervisor:
                     task["messages"] = messages
                     self._recover_tool_receipts(task, messages)
                     save()
-                    for _ in range(8):
+                    # A final model decision is still permitted after all 50 calls.
+                    for _ in range(MAX_WORKFLOW_TOOL_CALLS + 1):
                         if self._apply_control(user, session, workflow, save):
                             return workflow
                         self._start_activity(task, "model", "等待模型决策", save)
@@ -323,6 +330,11 @@ class Supervisor:
                         for call in response.tool_calls:
                             if self._apply_control(user, session, workflow, save):
                                 return workflow
+                            calls = [event for item in workflow["tasks"] for event in item.get("calls", []) if event.get("name")]
+                            if len(calls) >= MAX_WORKFLOW_TOOL_CALLS:
+                                raise RuntimeError(f"工作流工具调用已达到上限 {MAX_WORKFLOW_TOOL_CALLS} 次")
+                            if sum(event["name"] == call.name for event in calls) >= MAX_PER_TOOL_CALLS:
+                                raise RuntimeError(f"工具 {call.name} 的调用已达到上限 {MAX_PER_TOOL_CALLS} 次")
                             event = {"id": call.id, "name": call.name, "arguments": call.arguments, "status": "running"}
                             task["calls"].append(event)
                             self._start_activity(task, "tool", f"调用工具 {call.name}", save)
@@ -332,14 +344,14 @@ class Supervisor:
                                 event.update(status="completed", result=result)
                             except Exception as exc:  # noqa: BLE001
                                 self._finish_activity(task, "failed")
-                                event.update(status="failed", error=str(exc))
-                                result = {"error": str(exc)}
+                                event.update(status="failed", error=error_message(exc))
+                                result = {"error": error_message(exc)}
                             save()
                             messages.append({"role": "tool", "tool_call_id": call.id,
                                              "content": json.dumps(result, ensure_ascii=False)})
                             save()
                     else:
-                        raise RuntimeError("worker exceeded tool-call limit")
+                        raise RuntimeError("子任务超过模型决策轮次上限")
                     self._finish_activity(task)
                     workflow["trace"].append({"task": task["id"], "duration_ms": round((time.monotonic() - started) * 1000, 2),
                                               "status": task["status"]})
@@ -375,8 +387,8 @@ class Supervisor:
                 for task in workflow["tasks"]:
                     if task["status"] == "running":
                         self._finish_activity(task, "failed")
-                        task.update(status="failed", error=str(exc))
-                workflow.update(status="failed", error=str(exc))
+                        task.update(status="failed", error=error_message(exc))
+                workflow.update(status="failed", error=error_message(exc))
                 save()
                 raise
         return self._locked(user, session, run)

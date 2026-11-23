@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/he-yufeng/CoreCoder/actions/workflows/ci.yml/badge.svg)](https://github.com/he-yufeng/CoreCoder/actions)
-[![engine](https://img.shields.io/badge/engine-1530_LoC-blue)](article/00-index_EN.md)
+[![engine](https://img.shields.io/badge/engine-1531_LoC-blue)](article/00-index_EN.md)
 [![essays](https://img.shields.io/badge/source--reading-8_bilingual-orange)](article/00-index_EN.md)
 
 </div>
@@ -36,7 +36,7 @@ The nanoGPT column is there as a reference point: minimal, readable, but it teac
 
 I've always felt coding agents get talked about as if they were arcane. Strip a tool like Claude Code or Cursor all the way down and the core is a `while` loop wrapped around a large model, plus seven or eight tools that let it actually do things. The hard part was never the loop; it's everything the loop has to cope with once it meets the real world. CoreCoder is the minimal version that writes that core out honestly.
 
-The engine (loop, model interface, context, tools, sessions) is 1,515 lines once you drop blank lines and comments. Counting the outer CLI, config and packaging too, the whole package is 38 files: 5,150 physical lines, 4,361 net, every one short enough to read in a single sitting. The growth since the original 1,161-line snapshot went into visible features: plan mode, hooks and checkpoints, each documented below.
+The engine (loop, model interface, context, tools, sessions) is 1,515 lines once you drop blank lines and comments. Counting the outer CLI, config and packaging too, the whole package is 38 files: 5,226 physical lines, 4,430 net, every one short enough to read in a single sitting. The growth since the original 1,161-line snapshot went into visible features: plan mode, hooks and checkpoints, each documented below.
 
 And it really runs: reads and writes files, executes shell, spawns sub-agents, compacts context in three tiers, and tells you the tokens and dollars a run burned whenever you ask. Anything that would mutate your disk or run a command stops for your consent first. The suite has 363 offline tests and an opt-in live smoke test. But the point of it running isn't to become your daily driver. It runs so the walkthrough can't lie: a reference that shows how an agent works has to actually work.
 
@@ -192,7 +192,7 @@ I also wrote a bilingual source-reading series, one intro plus eight parts, each
 
 Once you understand it, the natural next step is to fork. Getting started doesn't take much:
 
-- **Swap in a model you actually use.** It's the two env vars from above; `llm.py` (364 lines) is the entry point for all provider adaptation.
+- **Swap in a model you actually use.** It's the two env vars from above; `llm.py` (367 lines) is the entry point for all provider adaptation.
 - **Add a tool of your own.** Write a new file against the tool base class in `tools/base.py` (32 lines): run tests, fetch a page, call an LSP, whatever. The end of the second essay walks you through your first one by hand.
 - **Rewrite the system prompt.** `prompt.py` is all of 41 lines; change one line and you'll watch the agent's temperament shift. It's the cheapest "change one thing, see a result" in the whole project.
 - **Import it as a library.** The top level exports `Agent`, `LLM`, and `Config`, ready to embed in your own program:

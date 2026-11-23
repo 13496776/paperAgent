@@ -65,6 +65,13 @@ class CorpusStore:
                     owner UNINDEXED, paper_id UNINDEXED, chunk_id UNINDEXED, tokens
                 );
             ''')
+            db.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(papers)")}
+            if "month" not in columns:
+                db.execute("ALTER TABLE papers ADD COLUMN month INTEGER")
+            if "date_source" not in columns:
+                db.execute("ALTER TABLE papers ADD COLUMN date_source TEXT NOT NULL DEFAULT ''")
+            db.commit()
             self._migrate_legacy(db)
 
     @contextmanager
@@ -83,12 +90,13 @@ class CorpusStore:
 
     def _insert(self, db, owner, paper, chunks):
         authors = json.dumps(paper.get("authors", ""), ensure_ascii=False)
-        db.execute("INSERT INTO papers VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'indexing', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+        db.execute("INSERT INTO papers (owner,id,title,authors,source,doi,ccf_rank,page_count,status,model,error,created_at,generation,chunk_size,chunk_overlap,index_version,venue,year,ccf_source,ccf_version,ccf_verified,updated_at,vector_path,month,date_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'indexing', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
                    (owner, paper["id"], paper["title"], authors, paper.get("source") or "",
                     paper.get("doi") or "", paper.get("ccf_rank"), paper.get("page_count"), time.time(), uuid.uuid4().hex,
                     paper.get("chunk_size"), paper.get("chunk_overlap"), paper.get("index_version", "legacy"),
                     paper.get("venue") or "", paper.get("year"), paper.get("ccf_source") or "",
-                    paper.get("ccf_version") or "", int(bool(paper.get("ccf_verified"))), time.time()))
+                    paper.get("ccf_version") or "", int(bool(paper.get("ccf_verified"))), time.time(),
+                    paper.get("month"), paper.get("date_source") or ""))
         used = set()
         for ordinal, item in enumerate(chunks):
             chunk = dict(item)
@@ -131,6 +139,9 @@ class CorpusStore:
         year = paper.get("year")
         if year is not None and (isinstance(year, bool) or not isinstance(year, int) or not 1000 <= year <= 9999):
             raise ValueError("year must be a four-digit integer")
+        month = paper.get("month")
+        if month is not None and (isinstance(month, bool) or not isinstance(month, int) or not 1 <= month <= 12 or year is None):
+            raise ValueError("month must be between 1 and 12 and requires a year")
         if paper.get("ccf_verified") and (not rank or not paper.get("ccf_source") or not paper.get("ccf_version")):
             raise ValueError("verified CCF rank requires rank, source and version")
         with self._connect() as db:
@@ -222,13 +233,13 @@ class CorpusStore:
         for ident in pending:
             self.delete(owner, ident)
         with self._connect() as db:
-            rows = db.execute("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at FROM papers "
+            rows = db.execute("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at,month,date_source FROM papers "
                               "WHERE owner=? AND status!='deleting' ORDER BY created_at DESC", (owner,)).fetchall()
         return [{"id": r[0], "title": r[1], "authors": json.loads(r[2]), "source": r[3], "doi": r[4],
                  "ccf_rank": r[5], "page_count": r[6], "status": r[7], "error": r[8], "chunk_size": r[9],
                  "chunk_overlap": r[10], "index_version": r[11], "embedding_model": r[12], "venue": r[13], "year": r[14],
                  "ccf_source": r[15], "ccf_version": r[16], "ccf_verified": bool(r[17]),
-                 "created_at": r[18], "updated_at": r[19]} for r in rows]
+                 "created_at": r[18], "updated_at": r[19], "month": r[20], "date_source": r[21]} for r in rows]
 
     def chunks(self, owner, paper_id=None, include_pending=False):
         with self._connect() as db:

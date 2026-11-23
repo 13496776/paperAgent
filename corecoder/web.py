@@ -279,14 +279,14 @@ def list_papers(user: str = Depends(current_user)):
 @app.post("/api/corpus/upload")
 def upload_paper(file: Annotated[UploadFile, File()], title: str = Form(""), authors: str = Form(""),
                  doi: str = Form(""), source: str = Form(""), ccf_rank: str = Form(""), venue: str = Form(""),
-                 year: int | None = Form(None), ccf_source: str = Form(""), ccf_version: str = Form(""),
+                 year: int | None = Form(None), month: int | None = Form(None), ccf_source: str = Form(""), ccf_version: str = Form(""),
                  ccf_verified: bool = Form(False), user: str = Depends(current_user)):
     from .papers.ingestion import MAX_PDF_BYTES, extract_pdf
 
     def ingest():
         data = file.file.read(MAX_PDF_BYTES + 1)
         paper = extract_pdf(data, file.filename or "paper.pdf", title=title, authors=authors, doi=doi,
-                            source=source, ccf_rank=ccf_rank or None, venue=venue, year=year,
+                            source=source, ccf_rank=ccf_rank or None, venue=venue, year=year, month=month,
                             ccf_source=ccf_source, ccf_version=ccf_version, ccf_verified=ccf_verified)
         return corpus_store().add(user, paper, get_models()[0])
     return handle(ingest)

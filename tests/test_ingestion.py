@@ -9,7 +9,7 @@ pytest.importorskip("fastapi")
 jwt = pytest.importorskip("jwt")
 pytest.importorskip("redis")
 from fastapi.testclient import TestClient
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from corecoder import web
@@ -49,14 +49,27 @@ def test_pdf_import_is_deduplicated_and_user_scoped(tmp_path):
         extract_pdf(b"not a pdf", "bad.pdf")
 
 
+def test_pdf_doi_from_metadata_and_user_overrides():
+    writer = PdfWriter()
+    writer.append(PdfReader(io.BytesIO(make_pdf())))
+    writer.add_metadata({"/Title": "Embedded title", "/Author": "Embedded author", "/Subject": "doi:10.1234/example"})
+    output = io.BytesIO()
+    writer.write(output)
+    detected = extract_pdf(output.getvalue(), "test.pdf")
+    assert (detected["title"], detected["authors"], detected["doi"]) == ("Embedded title", "Embedded author", "10.1234/example")
+    overridden = extract_pdf(output.getvalue(), "test.pdf", title="User title", authors="User author", doi="10.1234/manual")
+    assert (overridden["title"], overridden["authors"], overridden["doi"]) == ("User title", "User author", "10.1234/manual")
+
+
 def test_arxiv_feed_metadata():
     feed = b'''<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
     <entry><id>http://arxiv.org/abs/2401.12345v1</id><title>Paper title</title><summary>Abstract</summary>
-    <author><name>Researcher</name></author><arxiv:doi>10.1/example</arxiv:doi></entry></feed>'''
+    <author><name>Researcher</name></author><published>2024-02-03T12:00:00Z</published><arxiv:doi>10.1/example</arxiv:doi></entry></feed>'''
     result = parse_arxiv_feed(feed)[0]
     assert result["id"] == "2401.12345v1"
     assert result["doi"] == "10.1/example"
     assert result["authors"] == ["Researcher"]
+    assert (result["year"], result["month"], result["date_source"]) == (2024, 2, "arxiv_published")
 
 
 def test_authenticated_upload_and_list(tmp_path, monkeypatch):
@@ -77,13 +90,16 @@ def test_authenticated_upload_and_list(tmp_path, monkeypatch):
                            key, algorithm="HS256")
         return {"Authorization": "Bearer " + token}
     response = client.post("/api/corpus/upload", files={"file": ("paper.pdf", make_pdf(), "application/pdf")},
-                           data={"ccf_rank": "A"}, headers=auth("alice"))
+                           data={"ccf_rank": "A", "year": "2023", "month": "4", "doi": "10.1000/manual"}, headers=auth("alice"))
     assert response.status_code == 200, response.text
     assert response.json()["chunks"] == 1
     assert response.json()["ccf_rank"] == "A"
     assert response.json()["page_count"] == 1
+    assert (response.json()["year"], response.json()["month"], response.json()["date_source"]) == (2023, 4, "user")
     paper_id = response.json()["id"]
-    assert len(client.get("/api/corpus", headers=auth("alice")).json()) == 1
+    saved = client.get("/api/corpus", headers=auth("alice")).json()
+    assert len(saved) == 1
+    assert (saved[0]["authors"], saved[0]["doi"], saved[0]["month"]) == ("Example Author", "10.1000/manual", 4)
     assert client.get("/api/corpus", headers=auth("bob")).json() == []
     assert web.UserRetriever("alice").retrieve("retrieval")[0]["title"] == "Research Paper"
     assert web.UserRetriever("bob").retrieve("retrieval") == []
@@ -99,7 +115,7 @@ def test_arxiv_import_with_mocked_remote(tmp_path):
     from corecoder.papers.ingestion import get_arxiv_paper, search_arxiv
 
     feed = b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>https://arxiv.org/abs/2401.12345v1</id>
-    <title>Example</title><summary>Research abstract</summary><author><name>A</name></author></entry></feed>'''
+    <title>Example</title><summary>Research abstract</summary><author><name>A</name></author><published>2021-06-01T00:00:00Z</published></entry></feed>'''
     def response(request):
         if request.url.host == "export.arxiv.org":
             return httpx.Response(200, content=feed)
@@ -110,9 +126,74 @@ def test_arxiv_import_with_mocked_remote(tmp_path):
         paper = get_arxiv_paper("2401.12345v1", client)
     assert paper["title"] == "Example"
     assert paper["source"] == "https://arxiv.org/abs/2401.12345v1"
-    assert CorpusStore(tmp_path / "test.sqlite").add("alice", paper, Embedding())["created"]
+    store = CorpusStore(tmp_path / "test.sqlite")
+    assert store.add("alice", paper, Embedding())["created"]
+    saved = CorpusStore(tmp_path / "test.sqlite").papers("alice")[0]
+    assert (saved["authors"], saved["year"], saved["month"], saved["page_count"], saved["date_source"]) == ("A", 2021, 6, 1, "arxiv_published")
     with pytest.raises(ValueError):
         get_arxiv_paper("../../bad")
+
+
+def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch):
+    import httpx
+    from corecoder.papers import ingestion
+
+    waits = []
+    monkeypatch.setattr(ingestion.time, "sleep", waits.append)
+    monkeypatch.setattr(ingestion.random, "uniform", lambda a, b: 0.5)
+    count = []
+    def limited(request):
+        count.append(1)
+        if len(count) < 3:
+            return httpx.Response(429, headers={"Retry-After": "4"})
+        return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom"/>')
+    with httpx.Client(transport=httpx.MockTransport(limited)) as client:
+        assert ingestion.search_arxiv("test", client) == []
+    assert len(count) == 3 and waits == [4, 4]
+    count.clear()
+    def missing(request):
+        count.append(1)
+        return httpx.Response(404)
+    with httpx.Client(transport=httpx.MockTransport(missing)) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            ingestion.download_arxiv("2401.12345", client)
+    assert len(count) == 1
+
+
+def test_arxiv_retry_after_timeout(monkeypatch):
+    import httpx
+    from corecoder.papers import ingestion
+
+    waits, attempts = [], []
+    monkeypatch.setattr(ingestion.time, "sleep", waits.append)
+    monkeypatch.setattr(ingestion.random, "uniform", lambda a, b: 0.25)
+    def transient(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(200, content=make_pdf())
+    with httpx.Client(transport=httpx.MockTransport(transient)) as client:
+        assert ingestion.download_arxiv("2401.12345", client).startswith(b"%PDF-")
+    assert waits == [1.25] and len(attempts) == 2
+
+
+def test_metadata_date_validation_and_schema_migration(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.sqlite"
+    store = CorpusStore(path)
+    paper = extract_pdf(make_pdf(), "paper.pdf")
+    store.add("alice", paper, Embedding())
+    with sqlite3.connect(path) as db:
+        db.execute("ALTER TABLE papers DROP COLUMN month")
+        db.execute("ALTER TABLE papers DROP COLUMN date_source")
+    migrated = CorpusStore(path)
+    saved = migrated.papers("alice")[0]
+    assert saved["month"] is None and saved["date_source"] == ""
+    with pytest.raises(ValueError, match="month"):
+        migrated.add("bob", {**paper, "month": 13, "year": 2024}, Embedding())
+    with pytest.raises(ValueError, match="month"):
+        migrated.add("bob", {**paper, "month": 1}, Embedding())
 
 
 def test_inventory_and_retriever_cache_with_corpus_updates(tmp_path, monkeypatch):

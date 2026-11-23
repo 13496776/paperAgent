@@ -57,6 +57,9 @@ def main():
         console.print(f"Indexed {count} chunks.")
         return
 
+    if not args.paper_corpus or args.demo or args.persistent_session:
+        raise SystemExit("原始通用单 Agent 入口已停用，请使用 Web 多 Agent 工作台。")
+
     if args.demo:
         from .demo import run_demo
         raise SystemExit(run_demo())
