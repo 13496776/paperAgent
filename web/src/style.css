@@ -4,3 +4,5 @@
 .corpus-row{display:flex;gap:10px;margin-top:12px}.corpus-row input{flex:1}.corpus-item{display:flex;justify-content:space-between;gap:16px;border-top:1px solid #edf1ed;padding:15px 0;font-size:12px}.corpus-item small{display:block;color:#81938d;margin-top:5px}.corpus-item p{color:#61756b;line-height:1.5}.corpus-notice{color:#487c57;font-size:12px}
 
 .workflow-hint{font-size:12px;color:#647e70;line-height:1.6}
+
+.activity-current,.activity-row{font-size:12px;color:#52715f;line-height:1.7}.activity-row{padding:3px 0}

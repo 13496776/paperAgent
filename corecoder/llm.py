@@ -128,10 +128,12 @@ class LLM:
         model: str,
         api_key: str,
         base_url: str | None = None,
+        client_max_retries: int | None = None,
         **kwargs,
     ):
         self.model = model
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        client_options = {} if client_max_retries is None else {"max_retries": client_max_retries}
+        self.client = OpenAI(api_key=api_key, base_url=base_url, **client_options)
         self.extra = kwargs  # temperature, max_tokens, etc.
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0

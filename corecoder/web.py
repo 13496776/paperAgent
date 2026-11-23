@@ -1,9 +1,12 @@
 """FastAPI interface for authenticated research workflows."""
+import hashlib
 import hmac
 import json
+import math
 import os
 import threading
 import time
+from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
@@ -82,21 +85,66 @@ def import_arxiv(user, ident):
     return corpus_store().add(user, get_arxiv_paper(ident), get_models()[0])
 
 
+_retriever_cache = OrderedDict()
+_retriever_cache_lock = threading.Lock()
+
+
 class UserRetriever:
     def __init__(self, user):
         self.user = user
 
+    def list_papers(self):
+        papers = corpus_store().papers(self.user)
+        known = {paper["id"] for paper in papers}
+        index = os.environ.get("PAPER_CORPUS_PATH")
+        if index:
+            chunks = json.loads(Path(index).read_text(encoding="utf-8"))
+            for chunk in chunks:
+                ident = chunk.get("paper_id")
+                if ident and ident not in known:
+                    papers.append({"id": ident, "title": chunk.get("title", ""), "authors": chunk.get("authors", ""),
+                                   "source": chunk.get("source", ""), "doi": chunk.get("doi", "")})
+                    known.add(ident)
+        return {"count": len(papers), "papers": papers}
+
     def retrieve(self, query):
+        return self.retrieve_with_progress(query)
+
+    def retrieve_with_progress(self, query, progress=None):
         from .papers.retrieval import Retriever
 
+        if progress:
+            progress("corpus_load", "读取本地论文分块")
         chunks = corpus_store().chunks(self.user)
         index = os.environ.get("PAPER_CORPUS_PATH")
         if index:
             chunks.extend(json.loads(Path(index).read_text(encoding="utf-8")))
         if not chunks:
             return []
+        if progress:
+            progress("model_loading", "加载或复用嵌入模型和重排模型")
         embedding, reranker = get_models()
-        return Retriever(chunks, embedding, reranker).retrieve(query)
+        fingerprint = hashlib.sha256(json.dumps(chunks, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+        key = (self.user, fingerprint, id(embedding), id(reranker))
+        if progress:
+            progress("index_wait", "检查或等待向量索引")
+        with _retriever_cache_lock:
+            retriever = _retriever_cache.get(key)
+            if retriever is None:
+                if progress:
+                    progress("index_build", f"构建向量索引，编码 {len(chunks)} 个分块")
+                retriever = Retriever(chunks, embedding, reranker)
+                for old_key in list(_retriever_cache):
+                    if old_key[0] == self.user:
+                        del _retriever_cache[old_key]
+                _retriever_cache[key] = retriever
+                while len(_retriever_cache) > 16:
+                    _retriever_cache.popitem(last=False)
+            else:
+                _retriever_cache.move_to_end(key)
+                if progress:
+                    progress("index_cache", f"复用已构建的向量索引，包含 {len(chunks)} 个分块")
+        return retriever.retrieve(query, progress=progress)
 
 
 def get_tools(user):
@@ -117,7 +165,11 @@ def supervisor(provider, user):
         base = os.environ.get("OPENAI_BASE_URL")
     if not key:
         raise RuntimeError(f"{provider} API key is not configured")
-    return Supervisor(LLM(model=model, api_key=key, base_url=base), get_store(), get_tools(user))
+    timeout = float(os.environ.get("PAPER_LLM_TIMEOUT", "60"))
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("llm_timeout_seconds must be positive and finite")
+    return Supervisor(LLM(model=model, api_key=key, base_url=base, timeout=timeout, client_max_retries=0),
+                      get_store(), get_tools(user))
 
 
 def handle(call):

@@ -108,6 +108,7 @@ def test_pause_endpoint_works_during_running_request(tmp_path, monkeypatch):
         running = client.get("/api/sessions/demo", headers=headers).json()["workflow"]
         assert running["status"] == "running"
         assert running["tasks"][0]["status"] == "running"
+        assert running["tasks"][0]["activities"][-1]["detail"] == "等待模型决策"
         assert running["revision"] > initial_revision
         pause = client.post("/api/sessions/demo/pause", headers=headers)
         assert pause.status_code == 200
@@ -136,3 +137,18 @@ def test_default_provider(monkeypatch, deepseek, openai, expected):
     assert web.PlanRequest(question="Research?").provider == expected
     assert web.ResumeRequest().provider == expected
     assert web.PlanRequest(question="Research?", provider="openai").provider == "openai"
+
+
+def test_web_model_timeout_and_sdk_retries_are_bounded(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.delenv("PAPER_LLM_TIMEOUT", raising=False)
+    monkeypatch.setattr(web, "get_store", lambda: object())
+    monkeypatch.setattr(web, "get_tools", lambda user: object())
+    instance = web.supervisor("deepseek", "alice")
+    assert instance.llm.extra["timeout"] == 60
+    assert instance.llm.client.max_retries == 0
+    monkeypatch.setenv("PAPER_LLM_TIMEOUT", "12")
+    assert web.supervisor("deepseek", "alice").llm.extra["timeout"] == 12
+    monkeypatch.setenv("PAPER_LLM_TIMEOUT", "nan")
+    with pytest.raises(ValueError):
+        web.supervisor("deepseek", "alice")

@@ -13,5 +13,6 @@
   "chunk_overlap": 50,
   "rerank_threshold": 0.3,
   "retrieval_limit": 5,
-  "retrieval_candidates": 30
+  "retrieval_candidates": 30,
+  "llm_timeout_seconds": 60
 }

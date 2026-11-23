@@ -97,3 +97,16 @@ def test_reranker_score_threshold_and_heading_context():
     results = Retriever(chunks, Embedding(), Scores()).retrieve("query")
     assert [hit["id"] for hit in results] == ["2", "1"]
     assert [hit["rerank_score"] for hit in results] == [0.91, 0.3]
+
+
+def test_duplicate_text_from_different_papers_is_preserved():
+    class Scores:
+        def predict(self, pairs, activation_fn):
+            return [0.9 for _ in pairs]
+
+    chunks = [{"id": "chunk-a", "paper_id": "a", "title": "One", "text": "same text"},
+              {"id": "chunk-b", "paper_id": "b", "title": "Two", "text": "same text"},
+              {"id": "chunk-c", "paper_id": "a", "title": "One", "text": "same text"}]
+    results = Retriever(chunks, Embedding(), Scores()).retrieve("same")
+    assert {item["paper_id"] for item in results} == {"a", "b"}
+    assert len(results) == 2

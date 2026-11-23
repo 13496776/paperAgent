@@ -106,3 +106,170 @@ def test_arxiv_import_with_mocked_remote(tmp_path):
     assert CorpusStore(tmp_path / "test.sqlite").add("alice", paper, Embedding())["created"]
     with pytest.raises(ValueError):
         get_arxiv_paper("../../bad")
+
+
+def test_inventory_and_retriever_cache_with_corpus_updates(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "cache.sqlite"))
+    monkeypatch.delenv("PAPER_CORPUS_PATH", raising=False)
+
+    class CountingEmbedding:
+        def __init__(self):
+            self.batches = []
+
+        def encode(self, texts, normalize_embeddings=True):
+            self.batches.append(len(texts))
+            return [[1.0, 0.0] for _ in texts]
+
+    class Reranker:
+        def predict(self, pairs, activation_fn):
+            return [0.9 for _ in pairs]
+
+    embedding = CountingEmbedding()
+    reranker = Reranker()
+    monkeypatch.setattr(web, "get_models", lambda: (embedding, reranker))
+    store = web.corpus_store()
+    for i in range(3):
+        store.add("alice", {"id": str(i), "title": f"Paper {i}", "text": f"retrieval {i}",
+                            "authors": "", "source": "", "doi": ""}, embedding)
+    retriever = web.UserRetriever("alice")
+    assert retriever.list_papers()["count"] == 3
+    assert embedding.batches == []
+    assert len(retriever.retrieve("retrieval")) == 3
+    assert len(retriever.retrieve("retrieval")) == 3
+    assert embedding.batches == [3, 1, 1]
+    store.add("alice", {"id": "3", "title": "Paper 3", "text": "retrieval 3", "authors": "", "source": "", "doi": ""}, embedding)
+    assert retriever.list_papers()["count"] == 4
+    assert len(retriever.retrieve("retrieval")) == 4
+    assert embedding.batches[-2:] == [4, 1]
+    assert web.UserRetriever("bob").list_papers()["count"] == 0
+
+
+def test_inventory_includes_shared_index_once(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "shared.sqlite"))
+    index = tmp_path / "shared.json"
+    index.write_text(json.dumps([{"paper_id": "shared", "title": "Paper", "text": "part 1"},
+                                 {"paper_id": "shared", "title": "Paper", "text": "part 2"}]), encoding="utf-8")
+    monkeypatch.setenv("PAPER_CORPUS_PATH", str(index))
+    assert web.UserRetriever("alice").list_papers()["count"] == 1
+
+
+def test_rag_workflow_with_real_retrieval_components_and_mocked_models(tmp_path, monkeypatch):
+    from corecoder.llm import LLMResponse, ToolCall
+    from corecoder.persistent import SessionStore
+    from corecoder.workflow.engine import Supervisor
+
+    fakeredis = pytest.importorskip("fakeredis")
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "rag.sqlite"))
+    monkeypatch.delenv("PAPER_CORPUS_PATH", raising=False)
+
+    class Reranker:
+        def predict(self, pairs, activation_fn):
+            return [0.9 for _ in pairs]
+
+    embedding, reranker = Embedding(), Reranker()
+    monkeypatch.setattr(web, "get_models", lambda: (embedding, reranker))
+    web.corpus_store().add("alice", {"id": "p1", "title": "Retrieval paper", "text": "RAG uses retrieved evidence.",
+                                    "authors": "A", "source": "Journal", "doi": "10.1000/example"}, embedding)
+
+    class Model:
+        def __init__(self):
+            self.calls = 0
+
+        def chat(self, messages, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMResponse(content='{"tasks":[{"id":"a","worker":"retrieval","goal":"检索RAG","depends_on":[]},'
+                                           '{"id":"b","worker":"analysis","goal":"回答","depends_on":["a"]}]}')
+            if self.calls == 2:
+                return LLMResponse(tool_calls=[ToolCall("t1", "retrieve_chunks", {"query": "RAG evidence"})])
+            if self.calls == 3:
+                import json
+                hits = json.loads(messages[-1]["content"])
+                assert hits[0]["title"] == "Retrieval paper"
+                assert hits[0]["doi"] == "10.1000/example"
+                return LLMResponse(content="RAG uses evidence [Retrieval paper].")
+            assert "RAG uses evidence" in messages[-1]["content"]
+            assert "10.1000/example" in messages[-1]["content"]
+            return LLMResponse(content="Answer citing [Retrieval paper].")
+
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "sessions.sqlite")
+    supervisor = Supervisor(Model(), store, web.get_tools("alice"))
+    supervisor.start("alice", "rag", "What does RAG use?")
+    result = supervisor.resume("alice", "rag")
+    assert result["status"] == "completed"
+    assert "Retrieval paper" in result["result"]
+    stages = [event["stage"] for event in result["tasks"][0]["activities"]]
+    assert all(stage in stages for stage in ("model", "corpus_load", "index_build", "bm25", "query_embedding", "rerank"))
+
+
+def test_rag_uses_openai_compatible_streaming_and_tool_results(tmp_path, monkeypatch):
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from corecoder.llm import LLM
+    from corecoder.persistent import SessionStore
+    from corecoder.workflow.engine import Supervisor
+
+    fakeredis = pytest.importorskip("fakeredis")
+    requests = []
+    plan = '{"tasks":[{"id":"a","worker":"retrieval","goal":"find evidence","depends_on":[]},'
+    plan += '{"id":"b","worker":"analysis","goal":"answer","depends_on":["a"]}]}'
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append(body)
+            if len(requests) == 1:
+                delta = {"role": "assistant", "content": plan}
+                finish = "stop"
+            elif len(requests) == 2:
+                delta = {"role": "assistant", "tool_calls": [{"index": 0, "id": "t1", "type": "function",
+                         "function": {"name": "retrieve_chunks", "arguments": '{"query":"RAG evidence"}'}}]}
+                finish = "tool_calls"
+            else:
+                delta = {"role": "assistant", "content": "Evidence from Retrieval paper."}
+                finish = "stop"
+            chunk = {"id": "chat-test", "object": "chat.completion.chunk", "created": 1, "model": "test",
+                     "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+            payload = ("data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    class Ranker:
+        def predict(self, pairs, activation_fn):
+            return [0.9 for _ in pairs]
+
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "corpus.sqlite"))
+    monkeypatch.delenv("PAPER_CORPUS_PATH", raising=False)
+    encoder, ranker = Embedding(), Ranker()
+    monkeypatch.setattr(web, "get_models", lambda: (encoder, ranker))
+    web.corpus_store().add("alice", {"id": "p1", "title": "Retrieval paper", "text": "RAG uses evidence.",
+                                    "authors": "A", "source": "Journal", "doi": "10.1000/example"}, encoder)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        model = LLM("test", "test-key", base_url=f"http://127.0.0.1:{server.server_port}/v1", timeout=5,
+                    client_max_retries=0)
+        store = SessionStore(fakeredis.FakeRedis(), tmp_path / "session.sqlite")
+        supervisor = Supervisor(model, store, web.get_tools("alice"))
+        supervisor.start("alice", "session", "What evidence does RAG use?")
+        result = supervisor.resume("alice", "session")
+        assert result["status"] == "completed"
+        assert len(requests) == 4
+        assert any(message.get("role") == "tool" and "10.1000/example" in message["content"]
+                   for message in requests[2]["messages"])
+        assert "10.1000/example" in requests[3]["messages"][-1]["content"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

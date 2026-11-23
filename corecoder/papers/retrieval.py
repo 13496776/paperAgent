@@ -48,7 +48,7 @@ class Retriever:
         self.reranker = reranker
         self.vectors = embedding_model.encode([passage_text(c) for c in chunks], normalize_embeddings=True) if chunks else []
 
-    def retrieve(self, query, limit=None, candidates=None):
+    def retrieve(self, query, limit=None, candidates=None, progress=None):
         if limit is None:
             limit = int(os.environ.get("PAPER_RETRIEVAL_LIMIT", "5"))
         if candidates is None:
@@ -58,11 +58,19 @@ class Retriever:
             raise ValueError("retrieval limits must be positive and rerank threshold must be between 0 and 1")
         if not self.chunks:
             return []
+        if progress:
+            progress("bm25", "关键词检索")
         lexical = bm25(query, self.chunks)
+        if progress:
+            progress("query_embedding", "编码查询向量")
         vector = self.embedding_model.encode([query], normalize_embeddings=True)[0]
+        if progress:
+            progress("vector_search", "向量相似度检索")
         similarity = [sum(float(a) * float(b) for a, b in zip(vector, item)) for item in self.vectors]
         rankings = [sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:candidates]
                     for scores in (lexical, similarity)]
+        if progress:
+            progress("fusion", "融合并去重候选片段")
         fused = {}
         for ranking in rankings:
             for rank, index in enumerate(ranking, 1):
@@ -72,10 +80,13 @@ class Retriever:
         seen = set()
         unique = []
         for index in indexes:
-            key = " ".join(self.chunks[index]["text"].split()).casefold()
+            chunk = self.chunks[index]
+            key = (chunk.get("paper_id") or chunk.get("id"), " ".join(chunk["text"].split()).casefold())
             if key not in seen:
                 seen.add(key)
                 unique.append(index)
+        if progress:
+            progress("rerank", f"重排 {len(unique)} 个候选片段")
         scores = self.reranker.predict([(query, passage_text(self.chunks[i])) for i in unique],
                                        activation_fn=lambda logits: logits.sigmoid())
         ranked = sorted(zip(unique, scores), key=lambda pair: float(pair[1]), reverse=True)

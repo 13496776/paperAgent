@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { createWorkflowSync } from './workflowSync.mjs'
-type Task = { id: string; worker: string; goal: string; depends_on: string[]; status: string; result?: string; error?: string }
+type Activity = { stage: string; detail: string; status: string; started_at: number; duration_ms?: number; elapsed_ms?: number }
+type Task = { id: string; worker: string; goal: string; depends_on: string[]; status: string; result?: string; error?: string; activities?: Activity[] }
 type Workflow = { question: string; status: string; tasks: Task[]; revision?: number; result?: string; error?: string; trace?: unknown[]; control_requested?: string }
 const token = ref('')
 function initialSession() {
@@ -15,6 +16,7 @@ const question = ref('')
 const workflow = ref<Workflow | null>(null)
 const error = ref('')
 const busy = ref(false)
+const now = ref(Date.now())
 const controlBusy = ref(false)
 const confirming = ref(false)
 const syncError = ref('')
@@ -24,6 +26,7 @@ const corpusBusy = ref(false)
 const pdf = ref<File | null>(null)
 const searchQuery = ref('')
 const papers = ref<{id: string; title: string; source: string}[]>([])
+const corpusLoaded = ref(false)
 const results = ref<{id: string; title: string; authors: string[]; abstract: string}[]>([])
 const notice = ref('')
 onMounted(async () => {
@@ -51,6 +54,7 @@ onMounted(async () => {
   }
   if (token.value) void refreshWorkflow()
   pollTimer = setInterval(() => {
+    now.value = Date.now()
     if (token.value && (busy.value || ['planning', 'running'].includes(workflow.value?.status || ''))) {
       void refreshWorkflow()
     }
@@ -84,15 +88,22 @@ async function corpusAction(action: 'load' | 'upload' | 'search' | 'import', id 
       const result = await corpusRequest('/import', JSON.stringify({id}), 'application/json')
       notice.value = result.created ? `已导入 ${result.title}，生成 ${result.chunks} 个分块` : '该论文已经导入'
     }
-    if (action !== 'search') papers.value = await corpusRequest('')
+    if (action !== 'search') {
+      papers.value = await corpusRequest('')
+      corpusLoaded.value = true
+    }
   } catch (e) { error.value = e instanceof Error ? e.message : '语料库请求失败' }
   finally { corpusBusy.value = false }
 }
 function choosePdf(event: Event) {
   pdf.value = (event.target as HTMLInputElement).files?.[0] || null
 }
+function elapsed(activity: Activity) {
+  const milliseconds = activity.duration_ms ?? activity.elapsed_ms ?? Math.max(0, now.value - activity.started_at * 1000)
+  return (milliseconds / 1000).toFixed(1) + ' 秒'
+}
 const names: Record<string,string> = { ingestion: '数据接入', analysis: '推理分析', retrieval: '文献检索', delivery: '生成交付', evaluation: '测评运维' }
-const labels: Record<string,string> = { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败', awaiting_approval: '等待确认', cancelled: '已取消', paused: '已暂停', planning: '规划中' }
+const labels: Record<string,string> = { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败', awaiting_approval: '等待确认', cancelled: '已取消', paused: '已暂停', planning: '规划中', interrupted: '已中断' }
 async function request(path: string, body?: object) {
   const sessionId = session.value
   const requestId = sync.begin(sessionId)
@@ -182,12 +193,12 @@ async function act(action: 'plan' | 'resume' | 'load') {
     <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块，或检索并导入 arXiv 论文。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
       <div class="corpus-row"><input type="file" accept="application/pdf,.pdf" @change="choosePdf"><button :disabled="corpusBusy || !token || !pdf" @click="corpusAction('upload')">上传并建库</button></div>
       <div class="corpus-row"><input v-model="searchQuery" placeholder="搜索 arXiv 论文"><button class="secondary" :disabled="corpusBusy || !token || !searchQuery.trim()" @click="corpusAction('search')">在线检索</button></div>
-      <p v-if="notice" class="corpus-notice">{{ notice }}</p>
+      <p v-if="notice" class="corpus-notice">{{ notice }}</p><p v-if="corpusLoaded" class="corpus-notice">当前个人语料已导入 {{ papers.length }} 篇论文。</p>
       <div v-for="item in results" :key="item.id" class="corpus-item"><div><strong>{{ item.title }}</strong><small>{{ item.authors.join('、') }} · {{ item.id }}</small><p>{{ item.abstract }}</p></div><button class="secondary" :disabled="corpusBusy" @click="corpusAction('import', item.id)">导入</button></div>
       <details v-if="papers.length"><summary>已导入 {{ papers.length }} 篇论文</summary><div v-for="paper in papers" :key="paper.id" class="corpus-item"><div><strong>{{ paper.title }}</strong><small>{{ paper.source }}</small></div></div></details>
     </div>
     <div class="card"><div class="card-head"><div><h2>开始研究</h2><p>描述你的研究问题，先生成可审阅的任务计划。</p></div><select v-model="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option></select></div><textarea v-model="question" placeholder="例如：比较混合检索与重排序的作用，并整理证据来源。"></textarea><div class="prompt-footer"><span>计划生成后需要确认才会执行</span><button :disabled="busy || !token || !question.trim()" @click="act('plan')">{{ busy ? '处理中…' : '生成计划 →' }}</button></div></div>
     <div v-if="error" class="error">{{ error }}</div><div v-if="syncError" class="error">{{ syncError }}</div>
-    <div v-if="workflow" class="card"><div class="card-head"><div><div class="eyebrow">WORKFLOW</div><h2>任务计划</h2><p>{{ workflow.question }}</p></div><span class="status">{{ workflow.control_requested === 'cancel' ? '正在取消' : workflow.control_requested === 'pause' ? '正在暂停' : confirming && workflow.status === 'awaiting_approval' ? '正在提交执行请求' : labels[workflow.status] || workflow.status }}</span></div><div v-for="task in workflow.tasks" :key="task.id" class="task"><div class="task-indicator" :class="task.status"></div><div class="task-body"><div class="task-top"><strong>{{ names[task.worker] || task.worker }}</strong><span>{{ labels[task.status] || task.status }}</span></div><p>{{ task.goal }}</p><small v-if="task.depends_on.length">依赖 {{ task.depends_on.join('、') }}</small><p v-if="task.error" class="error">{{ task.error }}</p><details v-if="task.result"><summary>查看结果</summary><pre>{{ task.result }}</pre></details></div></div><details v-if="workflow.trace?.length"><summary>查看执行追踪</summary><pre>{{ JSON.stringify(workflow.trace, null, 2) }}</pre></details><div v-if="workflow.error" class="error">{{ workflow.error }}</div><p v-if="workflow.status === 'awaiting_approval' && !confirming" class="workflow-hint">计划已生成，请确认执行或取消计划。</p><p v-if="confirming && workflow.status === 'awaiting_approval'" class="workflow-hint">正在向后端提交执行请求，等待状态更新。</p><p v-if="workflow.control_requested" class="workflow-hint">请求已收到，正在等待当前模型或工具调用结束。</p><div v-if="workflow.status !== 'completed' && workflow.status !== 'cancelled'" class="actions"><button class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('cancel')">{{ workflow.status === 'running' ? '取消任务' : '取消计划' }}</button><button v-if="workflow.status === 'running'" class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('pause')">暂停</button><button v-if="['awaiting_approval', 'paused', 'failed'].includes(workflow.status) && workflow.tasks.length" :disabled="busy || controlBusy" @click="act('resume')">{{ workflow.status === 'awaiting_approval' ? '确认并执行 →' : '继续执行 →' }}</button></div><div v-if="workflow.result" class="result"><div class="eyebrow">RESEARCH OUTPUT</div><h3>研究结果</h3><pre>{{ workflow.result }}</pre></div></div>
+    <div v-if="workflow" class="card"><div class="card-head"><div><div class="eyebrow">WORKFLOW</div><h2>任务计划</h2><p>{{ workflow.question }}</p></div><span class="status">{{ workflow.control_requested === 'cancel' ? '正在取消' : workflow.control_requested === 'pause' ? '正在暂停' : confirming && workflow.status === 'awaiting_approval' ? '正在提交执行请求' : labels[workflow.status] || workflow.status }}</span></div><div v-for="task in workflow.tasks" :key="task.id" class="task"><div class="task-indicator" :class="task.status"></div><div class="task-body"><div class="task-top"><strong>{{ names[task.worker] || task.worker }}</strong><span>{{ labels[task.status] || task.status }}</span></div><p>{{ task.goal }}</p><small v-if="task.depends_on.length">依赖 {{ task.depends_on.join('、') }}</small><p v-if="task.status === 'running' && task.activities?.length" class="activity-current">{{ task.activities[task.activities.length - 1].detail }} · {{ elapsed(task.activities[task.activities.length - 1]) }}</p><details v-if="task.activities?.length"><summary>查看步骤耗时</summary><div v-for="(activity, index) in task.activities" :key="index" class="activity-row">{{ activity.detail }} · {{ elapsed(activity) }} · {{ labels[activity.status] || activity.status }}</div></details><p v-if="task.error" class="error">{{ task.error }}</p><details v-if="task.result"><summary>查看结果</summary><pre>{{ task.result }}</pre></details></div></div><details v-if="workflow.trace?.length"><summary>查看执行追踪</summary><pre>{{ JSON.stringify(workflow.trace, null, 2) }}</pre></details><div v-if="workflow.error" class="error">{{ workflow.error }}</div><p v-if="workflow.status === 'awaiting_approval' && !confirming" class="workflow-hint">计划已生成，请确认执行或取消计划。</p><p v-if="confirming && workflow.status === 'awaiting_approval'" class="workflow-hint">正在向后端提交执行请求，等待状态更新。</p><p v-if="workflow.control_requested" class="workflow-hint">请求已收到，正在等待当前模型或工具调用结束。</p><div v-if="workflow.status !== 'completed' && workflow.status !== 'cancelled'" class="actions"><button class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('cancel')">{{ workflow.status === 'running' ? '取消任务' : '取消计划' }}</button><button v-if="workflow.status === 'running'" class="secondary" :disabled="controlBusy || !!workflow.control_requested" @click="control('pause')">暂停</button><button v-if="['awaiting_approval', 'paused', 'failed'].includes(workflow.status) && workflow.tasks.length" :disabled="busy || controlBusy" @click="act('resume')">{{ workflow.status === 'awaiting_approval' ? '确认并执行 →' : '继续执行 →' }}</button></div><div v-if="workflow.result" class="result"><div class="eyebrow">RESEARCH OUTPUT</div><h3>研究结果</h3><pre>{{ workflow.result }}</pre></div></div>
   </section><aside class="right"><div class="card"><div class="eyebrow">AGENT TEAM</div><h2>研究团队</h2><p class="muted">每个角色负责不同的研究环节。</p><div v-for="(name, key) in names" :key="key" class="worker"><span class="worker-icon">✳</span><div><strong>{{ name }}</strong><small>{{ key }}</small></div></div></div><div class="note"><strong>会话与追踪</strong><p>执行计划和阶段结果保存在当前会话中。加载相同会话可继续查看。</p></div></aside></div></main></div>
 </template>

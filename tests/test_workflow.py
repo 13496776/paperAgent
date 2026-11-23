@@ -215,3 +215,25 @@ def test_pause_before_tool_execution_does_not_run_it(tmp_path):
     assert supervisor.resume("alice", "session")["status"] == "completed"
     assert tool_calls == []
     assert any("not executed" in (message.get("content") or "") for message in model.last_messages)
+
+
+def test_inventory_tool_routes_exact_count_without_embedding(tmp_path):
+    class Inventory:
+        def list_papers(self):
+            return {"count": 3, "papers": [{"id": str(i), "title": f"Paper {i}"} for i in range(3)]}
+
+        def retrieve(self, query):
+            raise AssertionError("inventory must not invoke vector search")
+
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "统计论文", "depends_on": []},
+                      {"id": "two", "worker": "analysis", "goal": "汇报数量", "depends_on": ["one"]}]}
+    responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=[ToolCall("c", "list_corpus_papers", {})]),
+                 LLMResponse(content="语料库共 3 篇论文"), LLMResponse(content="当前有 3 篇论文")]
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Scripted(responses), store, ResearchTools(Inventory()))
+    supervisor.start("alice", "session", "统计文献库里有几篇论文")
+    result = supervisor.resume("alice", "session")
+    assert result["status"] == "completed"
+    assert result["tasks"][0]["calls"][0]["result"]["count"] == 3
+    assert result["result"] == "当前有 3 篇论文"
+    assert all(activity["duration_ms"] >= 0 for activity in result["tasks"][0]["activities"])

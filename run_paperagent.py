@@ -1,5 +1,6 @@
 """Start a local PaperAgent test environment on Windows, macOS or Linux."""
 import argparse
+import math
 import os
 import secrets
 import shutil
@@ -129,6 +130,9 @@ def main():
         raise ValueError("Check chunk_size, chunk_overlap and rerank_threshold in the configuration")
     if int(os.environ.get("PAPER_RETRIEVAL_LIMIT", "5")) < 1 or int(os.environ.get("PAPER_RETRIEVAL_CANDIDATES", "30")) < 1:
         raise ValueError("retrieval_limit and retrieval_candidates must be positive")
+    timeout = float(os.environ.get("PAPER_LLM_TIMEOUT", "60"))
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("llm_timeout_seconds must be positive and finite")
     check_port(8000)
     check_port(5173)
     redis_name = None
