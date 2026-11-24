@@ -84,7 +84,7 @@ class ResearchTools:
                     "description": "List local papers and exact count; optionally filter by recorded year. arXiv years are first-publication years, not necessarily journal publication years. Papers with unknown year are excluded and reported as unknown_year_count.",
                     "parameters": {"type": "object", "properties": {"year": {"type": "integer", "minimum": 1000, "maximum": 9999}}, "additionalProperties": False}}})
             if self.online_search:
-                tools.append({"type": "function", "function": {"name": "search_arxiv", "description": "Search online arXiv metadata; do not import papers unless requested",
+                tools.append({"type": "function", "function": {"name": "search_arxiv", "description": "Search arXiv metadata. Official API URL format: http://export.arxiv.org/api/{method_name}?{parameters}; this tool uses HTTPS and the query method. Do not import papers unless requested.",
                     "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "start": {"type": "integer", "minimum": 0}, "max_results": {"type": "integer", "minimum": 1, "maximum": 50}}, "required": ["query"], "additionalProperties": False}}})
             return tools
         if worker == "ingestion" and self.online_import:
@@ -251,7 +251,9 @@ class Supervisor:
                      "Use list_corpus_papers for corpus inventory and metadata filters such as publication year, "
                      "passing year when specified. Do not use retrieve_chunks for metadata-only listing or counting. "
                      "Never estimate counts from retrieved chunks. "
-                     + ("Online search_arxiv is available. Only use it when online search is requested or allowed; "
+                     + ("Online search_arxiv is available. The official arXiv API URL format is "
+                        "http://export.arxiv.org/api/{method_name}?{parameters}; use search_arxiv for API requests. "
+                        "Only use it when online search is requested or allowed; "
                         "only plan import_arxiv if the user explicitly requests import. " if online else
                         "Online search and import are unavailable; do not plan online work. ")},
                     {"role": "user", "content": json.dumps({"question": question, "summary": summary, "history": history[-10:]},
@@ -453,6 +455,8 @@ class Supervisor:
                                  "from journal publication dates. Never infer totals from "
                                  "retrieved passages. If retrieval returns no evidence, explicitly say so. "
                                  "Use only necessary searches; reuse prior evidence, and stop once the question is supported. "
+                                 "For arXiv, the official API URL format is http://export.arxiv.org/api/{method_name}?{parameters}; "
+                                 "use the provided search_arxiv tool for API requests. "
                                  "If the budget is exhausted, explain missing evidence rather than inventing it."},
                                 {"role": "user", "content": json.dumps({"question": workflow["question"], "goal": task["goal"],
                                   "dependencies": results, "previous_evidence": evidence_catalog,

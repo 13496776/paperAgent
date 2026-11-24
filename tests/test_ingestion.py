@@ -72,7 +72,121 @@ def test_arxiv_feed_metadata():
     assert (result["year"], result["month"], result["date_source"]) == (2024, 2, "arxiv_published")
 
 
-def test_arxiv_pagination_and_legacy_identifiers():
+@pytest.fixture
+def unpaced_arxiv(monkeypatch):
+    from corecoder.papers import ingestion
+
+    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation: operation())
+
+
+def test_arxiv_requests_are_serialized_and_spaced_after_completion(tmp_path, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from corecoder.papers import ingestion
+
+    clock = [100.0]
+    starts = []
+    active = 0
+    max_active = 0
+    guard = threading.Lock()
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    def operation():
+        nonlocal active, max_active
+        with guard:
+            active += 1
+            max_active = max(max_active, active)
+            starts.append(clock[0])
+        clock[0] += 5
+        with guard:
+            active -= 1
+
+    monkeypatch.setattr(ingestion.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(ingestion.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ingestion.time, "sleep", sleep)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(lambda _: ingestion._arxiv_operation(operation), range(3)))
+    assert max_active == 1
+    assert starts == [100.0, 108.0, 116.0]
+
+
+def test_arxiv_limit_is_shared_across_processes(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    code = '''
+import json, time
+from corecoder.papers.ingestion import _arxiv_operation
+def request():
+    started = time.time()
+    time.sleep(0.2)
+    print(json.dumps([started, time.time()]), flush=True)
+_arxiv_operation(request)
+'''
+    env = os.environ.copy()
+    env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(tmp_path)
+    processes = [subprocess.Popen([sys.executable, "-c", code], env=env, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True) for _ in range(2)]
+    results = []
+    for process in processes:
+        stdout, stderr = process.communicate(timeout=15)
+        assert process.returncode == 0, stderr
+        results.append(json.loads(stdout))
+    first, second = sorted(results)
+    assert second[0] - first[1] >= 2.9
+
+
+def test_arxiv_custom_client_and_retries_use_rate_limiter(monkeypatch):
+    import httpx
+
+    from corecoder.papers import ingestion
+
+    calls = []
+    attempts = []
+    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation: (calls.append(1), operation())[1])
+    monkeypatch.setattr(ingestion.time, "sleep", lambda _: None)
+
+    def response(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom"/>')
+
+    with httpx.Client(transport=httpx.MockTransport(response)) as client:
+        assert ingestion.search_arxiv("test", client) == []
+    assert len(calls) == len(attempts) == 2
+
+
+def test_arxiv_retry_spacing_with_custom_http_client(tmp_path, monkeypatch):
+    import httpx
+
+    from corecoder.papers import ingestion
+
+    clock = [100.0]
+    starts = []
+    monkeypatch.setattr(ingestion.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(ingestion.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ingestion.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(ingestion.random, "uniform", lambda *_: 0)
+
+    def response(request):
+        starts.append(clock[0])
+        clock[0] += 1
+        if len(starts) == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom"/>')
+
+    with httpx.Client(transport=httpx.MockTransport(response)) as client:
+        assert ingestion.search_arxiv("test", client) == []
+    assert starts == [100.0, 104.0]
+
+
+def test_arxiv_pagination_and_legacy_identifiers(unpaced_arxiv):
     import httpx
     from corecoder.papers.ingestion import search_arxiv
     feed = b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/solv-int/9901001v2</id>
@@ -125,7 +239,7 @@ def test_authenticated_upload_and_list(tmp_path, monkeypatch):
     assert client.get("/api/corpus").status_code in (401, 403)
 
 
-def test_arxiv_import_with_mocked_remote(tmp_path):
+def test_arxiv_import_with_mocked_remote(tmp_path, unpaced_arxiv):
     import httpx
 
     from corecoder.papers.ingestion import get_arxiv_paper, search_arxiv
@@ -150,7 +264,7 @@ def test_arxiv_import_with_mocked_remote(tmp_path):
         get_arxiv_paper("../../bad")
 
 
-def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch):
+def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch, unpaced_arxiv):
     import httpx
     from corecoder.papers import ingestion
 
@@ -176,7 +290,7 @@ def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch):
     assert len(count) == 1
 
 
-def test_arxiv_retry_after_timeout(monkeypatch):
+def test_arxiv_retry_after_timeout(monkeypatch, unpaced_arxiv):
     import httpx
     from corecoder.papers import ingestion
 

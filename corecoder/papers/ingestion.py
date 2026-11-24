@@ -2,8 +2,10 @@
 import hashlib
 import io
 import math
+import os
 import random
 import re
+import tempfile
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -12,6 +14,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import httpx
+from filelock import FileLock
 from pypdf import PdfReader
 
 from .storage import CorpusStore  # noqa: F401
@@ -19,19 +22,29 @@ from .storage import CorpusStore  # noqa: F401
 MAX_PDF_BYTES = 20 * 1024 * 1024
 _ARXIV_ID = re.compile(r"(?:\d{4}\.\d{4,5}|[a-z][a-z.-]*/\d{7})(?:v\d+)?\Z")
 _arxiv_lock = threading.Lock()
-_arxiv_last_request = 0.0
 
 
-def _arxiv_operation(operation, paced):
-    if not paced:
-        return operation()
-    global _arxiv_last_request
+def _arxiv_operation(operation):
     with _arxiv_lock:
-        delay = 3.0 - (time.monotonic() - _arxiv_last_request)
-        if delay > 0:
-            time.sleep(delay)
-        _arxiv_last_request = time.monotonic()
-        return operation()
+        identity = str(os.getuid()) if hasattr(os, "getuid") else os.environ.get("USERNAME", "default")
+        prefix = Path(tempfile.gettempdir()) / ("paperagent-arxiv-" + hashlib.sha256(identity.encode()).hexdigest()[:16])
+        state = prefix.with_suffix(".time")
+        with FileLock(str(prefix) + ".lock"):
+            if state.exists():
+                try:
+                    previous = float(state.read_text(encoding="ascii"))
+                    if not math.isfinite(previous):
+                        raise ValueError("invalid timestamp")
+                except (ValueError, UnicodeError):
+                    previous = time.time()
+                delay = 3.0 - max(0.0, time.time() - previous)
+                if delay > 0:
+                    time.sleep(delay)
+            state.write_text(str(time.time()), encoding="ascii")
+            try:
+                return operation()
+            finally:
+                state.write_text(str(time.time()), encoding="ascii")
 
 
 def _retry_arxiv(operation):
@@ -104,7 +117,7 @@ def search_arxiv(query, client=None, *, start=0, max_results=10):
                                "start": start, "max_results": max_results}, timeout=20, follow_redirects=False)
         response.raise_for_status()
         return response
-    response = _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
+    response = _retry_arxiv(lambda: _arxiv_operation(fetch))
     return parse_arxiv_feed(response.content)
 
 
@@ -141,7 +154,7 @@ def download_arxiv(ident, client=None):
                 if len(data) > MAX_PDF_BYTES:
                     raise ValueError("PDF exceeds 20 MiB")
         return bytes(data)
-    return _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
+    return _retry_arxiv(lambda: _arxiv_operation(fetch))
 
 
 def get_arxiv_paper(ident, client=None):
@@ -152,7 +165,7 @@ def get_arxiv_paper(ident, client=None):
         response = request.get("https://export.arxiv.org/api/query", params={"id_list": ident}, timeout=20, follow_redirects=False)
         response.raise_for_status()
         return response
-    response = _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
+    response = _retry_arxiv(lambda: _arxiv_operation(fetch))
     papers = parse_arxiv_feed(response.content)
     if not papers or re.sub(r"v\d+$", "", papers[0]["id"]) != re.sub(r"v\d+$", "", ident):
         raise ValueError("arXiv paper not found")
