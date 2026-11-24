@@ -53,6 +53,7 @@ def test_local_sign_in_is_one_use_and_produces_valid_jwt(monkeypatch):
     assert response.headers["cache-control"] == "no-store"
     claims = jwt.decode(response.json()["token"], key, algorithms=["HS256"], audience="app", issuer="issuer")
     assert claims["sub"] == "local-user"
+    assert claims["exp"] - claims["iat"] == 24 * 60 * 60
     assert client.post("/api/local-session", json={"code": "test-code"}).status_code == 401
 
 
