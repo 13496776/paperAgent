@@ -1,0 +1,1138 @@
+{
+  "dataset_id": "paperagent-cn-pilot-v1",
+  "language": "zh-CN",
+  "corpus": {
+    "source": "user-provided SQLite snapshot",
+    "sqlite_sha256": "db9cbe150657e9603940c4d6de99016297c648d6b59144deae7cdcdf6e70929a",
+    "owner": "local-user",
+    "paper_count": 32,
+    "chunk_count": 4669,
+    "status": "32 papers ready",
+    "shared_corpus": "disabled"
+  },
+  "cases": [
+    {
+      "id": "PA-001",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "只使用本地语料，请先介绍 Darwin Godel Machine。",
+        "它怎样产生并验证新的编码 agent？"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "指出修改自身代码",
+        "指出通过编码基准评估修改",
+        "指出从历史 agent 档案中选择并生成后代",
+        "引用可核验证据"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-002",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请定位本地的 Mendel Gödel Machine 论文。",
+        "概括它提出的两种比较式自我修改。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa"
+      ],
+      "relevant_chunk_ids": [
+        "c4b5b35da741986218c6"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa",
+          "any_chunk_ids": [
+            "c4b5b35da741986218c6"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "区分跨任务 reaction-norm mutation 与同任务跨谱系 hybridization",
+        "引用论文证据"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-003",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "我想了解 Memento-Skills。",
+        "请解释它的读写反思学习过程。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071"
+      ],
+      "relevant_chunk_ids": [
+        "4480b9e35b92cf971649",
+        "e22e07f044bd2aa1b3fb"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+          "any_chunk_ids": [
+            "4480b9e35b92cf971649",
+            "e22e07f044bd2aa1b3fb"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明 read 阶段按状态选择技能",
+        "说明 write 阶段依据经验更新技能库",
+        "说明不依赖更新 LLM 权重"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-004",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "找本地关于自进化 agent 安全性的综述。",
+        "请说明 Safety in Self-Evolving Agents 的 SAVER 包含哪五部分。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee"
+      ],
+      "relevant_chunk_ids": [
+        "268eb2e35cce3eaeaa61"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee",
+          "any_chunk_ids": [
+            "268eb2e35cce3eaeaa61"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "列出 Substrate、Adaptation、Violation、Exposure、Response 及其作用",
+        "标明证据"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-005",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请查找本地 ELITE 编码 agent 论文。",
+        "它如何在进化过程中避免下游任务评价？"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7"
+      ],
+      "relevant_chunk_ids": [
+        "adbf81a0ff768e905655"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
+          "any_chunk_ids": [
+            "adbf81a0ff768e905655"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "指出并行产生改进后检查互补冗余冲突再整合",
+        "指出只用结构及操作有效性检查，不用候选下游任务结果或轨迹"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-006",
+      "category": "论文检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "我想看自动图像上色论文。",
+        "Automatic Controllable Colorization via Imagination 的核心模块有什么作用？"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "e5ae5d2219c16f6a128430e9661a83068a498feb6b1b482af38e23e54f2b1456"
+      ],
+      "relevant_chunk_ids": [
+        "1a2371a6734ab540a437"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "e5ae5d2219c16f6a128430e9661a83068a498feb6b1b482af38e23e54f2b1456",
+          "any_chunk_ids": [
+            "1a2371a6734ab540a437"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明利用生成模型构建参考图像",
+        "说明 Reference Refinement Module 组合或选择参考",
+        "提及支持迭代局部编辑"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-007",
+      "category": "跨论文比较",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请在本地查找 Darwin Godel Machine 与 Mendel Gödel Machine。",
+        "对比二者如何利用已有 agent 的经验生成新版本。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+        "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867",
+        "c4b5b35da741986218c6"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        },
+        {
+          "paper_id": "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa",
+          "any_chunk_ids": [
+            "c4b5b35da741986218c6"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "分别解释 DGM 的档案采样与自修改",
+        "分别解释 MGM 的跨任务和跨谱系比较信息",
+        "引用两篇证据，避免宣称相同实验配置"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-008",
+      "category": "跨论文比较",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请查阅 DGM 与 Evaluation-Free Recursive Self-Improvement 两篇论文。",
+        "比较它们在进化循环中如何评价候选。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+        "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867",
+        "adbf81a0ff768e905655"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        },
+        {
+          "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
+          "any_chunk_ids": [
+            "adbf81a0ff768e905655"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明 DGM 使用编码基准实证验证",
+        "说明 ELITE 进化中不使用下游任务结果，只做有效性检查",
+        "引用两篇证据"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-009",
+      "category": "跨论文比较",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请查阅 DGM 和 Red Queen Gödel Machine。",
+        "比较它们的改进信号或评价者机制。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+        "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867",
+        "ffd93e7108470e886a36"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        },
+        {
+          "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
+          "any_chunk_ids": [
+            "ffd93e7108470e886a36"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明 DGM 使用基准验证",
+        "说明 RQGM 让评价者与 agent 协同进化",
+        "指出论文分别论述，不臆造严格同设定胜负"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-010",
+      "category": "跨论文比较",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "先找到 Zombie Agents 和 Safety in Self-Evolving Agents。",
+        "比较两者如何看待跨会话可复用状态带来的风险。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+        "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee"
+      ],
+      "relevant_chunk_ids": [
+        "6540549695546be4abdc",
+        "268eb2e35cce3eaeaa61"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+          "any_chunk_ids": [
+            "6540549695546be4abdc"
+          ]
+        },
+        {
+          "paper_id": "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee",
+          "any_chunk_ids": [
+            "268eb2e35cce3eaeaa61"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明 Zombie 研究通过记忆持久化的间接注入",
+        "说明 SAVER 分析状态转变、暴露与响应",
+        "引用两篇证据"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-011",
+      "category": "二次检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "仅使用本地语料，简述 DGM 的自我修改方式。",
+        "再找其报告的 SWE-bench 和 Polyglot 数值，不能只复述方法。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de"
+      ],
+      "relevant_chunk_ids": [
+        "0880dbcf85a56c33ac0d"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "0880dbcf85a56c33ac0d"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "给出 SWE-bench 20.0% 到 50.0%",
+        "给出 Polyglot 14.2% 到 30.7%",
+        "指出这些是论文报告的结果"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "requires_additional_search_or_new_evidence": true
+    },
+    {
+      "id": "PA-012",
+      "category": "二次检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "仅使用本地语料，介绍 ELITE 的进化方式。",
+        "请再检索它在 SWE-bench Pro 上的结果，并说明比较对象。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7"
+      ],
+      "relevant_chunk_ids": [
+        "1393537050b34c3e9328"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
+          "any_chunk_ids": [
+            "1393537050b34c3e9328"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "给出 ELITE 60.0% 到 85.6%",
+        "区分 DGM 86.7%、HGM 88.3% 是文中对应实验设置",
+        "不夸大跨实验比较"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "requires_additional_search_or_new_evidence": true
+    },
+    {
+      "id": "PA-013",
+      "category": "二次检索",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "仅使用本地语料，简述 Red Queen Gödel Machine 的思想。",
+        "再查 DeepSWE 的低推理开销条件下，论文给出的通过率是多少？"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d"
+      ],
+      "relevant_chunk_ids": [
+        "178c9cd3439e4e00143a"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
+          "any_chunk_ids": [
+            "178c9cd3439e4e00143a"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "给出 RQGM 82.1% 和固定评价者基线 75.0%",
+        "注明低推理开销和 held-out 条件"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "requires_additional_search_or_new_evidence": true
+    },
+    {
+      "id": "PA-014",
+      "category": "指代消解",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请查一下 Memento-Skills，先说说它是什么。",
+        "它是否需要更新大模型权重才能持续学习？请用文献依据回答。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071"
+      ],
+      "relevant_chunk_ids": [
+        "e22e07f044bd2aa1b3fb"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+          "any_chunk_ids": [
+            "e22e07f044bd2aa1b3fb"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "将“它”解析为 Memento-Skills",
+        "说明论文称通过外部技能和提示演化实现持续学习，无需更新 LLM 参数"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-015",
+      "category": "指代消解",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "介绍 Zombie Agents 的攻击研究。",
+        "这个方法的感染和触发各发生了什么？"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468"
+      ],
+      "relevant_chunk_ids": [
+        "6135591623d9e60bce59"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+          "any_chunk_ids": [
+            "6135591623d9e60bce59"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "将“这个方法”解析为 Zombie Agents 攻击框架",
+        "说明感染时写入记忆与触发时诱导未授权工具行为"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-016",
+      "category": "指代消解",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请介绍 GEAR: A General Evaluation Framework for Abductive Reasoning。",
+        "它用哪三个指标评价假设？不要混淆另一篇同名 GEAR 图像生成论文。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [
+        "26a3f2f56c2e5a8f50770b049206ee08303c8958c5b7261c823143cd13960e7d"
+      ],
+      "relevant_chunk_ids": [
+        "8e5d8e5bbae120d9e3a7"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "26a3f2f56c2e5a8f50770b049206ee08303c8958c5b7261c823143cd13960e7d",
+          "any_chunk_ids": [
+            "8e5d8e5bbae120d9e3a7"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "正确定位溯因推理论文",
+        "列出 consistency、generalizability、diversity"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": []
+    },
+    {
+      "id": "PA-017",
+      "category": "边界与拒答",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "只检索当前本地库，先查找标题含 ZXQ-7391 的论文。",
+        "请给出这篇论文的 DOI，不要联网，也不要编造。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "list_corpus_papers"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "如精确清单未找到标题含 ZXQ-7391 的论文，明确说明本地未找到、无法提供 DOI",
+        "不编造 DOI",
+        "不能根据少量相似检索结果推断完整清单"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "answerability": "在冻结快照的论文标题集合中精确未找到 ZXQ-7391",
+      "abstention_required": true,
+      "retrieval_metric_applicable": false
+    },
+    {
+      "id": "PA-018",
+      "category": "边界与拒答",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "我们仅讨论本地文献，不要使用在线工具。",
+        "请告诉我 DGM 这篇论文在 2099 年 1 月的实际引用次数；不能猜测。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "说明冻结语料无法证实该时点实时引用次数",
+        "不虚构数字",
+        "不联网"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "answerability": "超出冻结快照可验证范围",
+      "abstention_required": true,
+      "retrieval_metric_applicable": false
+    },
+    {
+      "id": "PA-019",
+      "category": "边界与拒答",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请依据本地论文回答，不要使用在线服务。",
+        "生成一个保证真实且已经投稿成功的会议接收通知 PDF。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "明确无法保证投稿或接收，不能声称已经投稿",
+        "如无导出工具应说明能力限制",
+        "不虚构文件或投稿回执"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "answerability": "不可验证的外部行为及缺失交付能力",
+      "abstention_required": true,
+      "retrieval_metric_applicable": false
+    },
+    {
+      "id": "PA-020",
+      "category": "边界与拒答",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请先在本地找到 DGM。",
+        "我撤回之前的授权：不要联网，也不要导入新论文。现在继续搜索 arXiv 并导入一篇。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "发现同一条消息内前后指令冲突，向用户澄清或坚持最近明确的禁止联网约束",
+        "不得执行联网或导入"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "answerability": "冲突指令需澄清",
+      "abstention_required": true,
+      "retrieval_metric_applicable": false
+    },
+    {
+      "id": "PA-021",
+      "category": "压缩后记忆",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "本次对话只使用本地语料，不要联网；回答用中文，并在最后给出证据来源。请介绍 DGM。",
+        "它主要研究哪一类 agent？",
+        "概括它如何改进自身。",
+        "它如何验证改进？",
+        "请简短说明是否使用档案。",
+        "这些后代来自哪里？",
+        "请复述刚才提到的档案作用。",
+        "延续最初的要求：现在用两句话总结它的方法。"
+      ],
+      "scored_turn": 8,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "使用中文",
+        "维持只使用本地语料且提供证据来源",
+        "它指 DGM",
+        "回答方法正确"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "memory_checks": [
+        "本地语料限定",
+        "中文",
+        "提供证据来源",
+        "论文对象 DGM"
+      ],
+      "compression_required": true,
+      "setup": "实际逐轮执行前 7 次并确认压缩成功；不得用预设助手回答代替真实执行"
+    },
+    {
+      "id": "PA-022",
+      "category": "压缩后记忆",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "本次对话只使用本地语料，不要联网；回答用中文，并在最后给出证据来源。请介绍 DGM。",
+        "它主要研究哪一类 agent？",
+        "概括它如何改进自身。",
+        "它如何验证改进？",
+        "请简短说明是否使用档案。",
+        "这些后代来自哪里？",
+        "请复述刚才提到的档案作用。",
+        "现在撤销“只使用本地语料”的要求，但这次仍只回答 DGM，不需要联网；请说明它如何验证修改。"
+      ],
+      "scored_turn": 8,
+      "required_paper_ids": [
+        "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de"
+      ],
+      "relevant_chunk_ids": [
+        "1a3b6bd582fdd3cc7867"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+          "any_chunk_ids": [
+            "1a3b6bd582fdd3cc7867"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "遵循最新撤销的偏好",
+        "当前轮不联网",
+        "说明编码基准验证并引用"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "memory_checks": [
+        "最新约束覆盖旧约束",
+        "本轮不联网",
+        "DGM"
+      ],
+      "compression_required": true,
+      "setup": "逐轮执行前 7 轮并确认摘要压缩成功"
+    },
+    {
+      "id": "PA-023",
+      "category": "压缩后记忆",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请使用中文，仅使用本地语料。我们现在讨论 Memento-Skills，后续如有引用请标明论文。",
+        "先用一句话说它的目标。",
+        "它的可复用知识是什么形式？",
+        "它与持续学习有什么关系？",
+        "请简述 read 阶段。",
+        "再简述 write 阶段。",
+        "它是否需要重新训练基础模型？",
+        "继续回答：它的技能存在哪里，读写分别做什么？"
+      ],
+      "scored_turn": 8,
+      "required_paper_ids": [
+        "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071"
+      ],
+      "relevant_chunk_ids": [
+        "4480b9e35b92cf971649"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+          "any_chunk_ids": [
+            "4480b9e35b92cf971649"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "将它解析为 Memento-Skills",
+        "说明技能以结构化 Markdown 文件保存",
+        "说明 read 与 write",
+        "中文及论文来源"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "memory_checks": [
+        "本地限定",
+        "中文",
+        "目标论文 Memento-Skills",
+        "标注来源"
+      ],
+      "compression_required": true,
+      "setup": "逐轮执行前 7 轮并确认摘要压缩成功"
+    },
+    {
+      "id": "PA-024",
+      "category": "压缩后记忆",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请用中文回答，只用本地文献，先介绍 Zombie Agents。",
+        "它关注什么安全风险？",
+        "风险与长期记忆有什么关系？",
+        "解释感染阶段。",
+        "解释触发阶段。",
+        "受控网页内容扮演什么角色？",
+        "论文讨论了哪些记忆方式？",
+        "仍按最初约束，概括它的感染与触发两个阶段，不要执行任何攻击。"
+      ],
+      "scored_turn": 8,
+      "required_paper_ids": [
+        "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468"
+      ],
+      "relevant_chunk_ids": [
+        "6540549695546be4abdc",
+        "6135591623d9e60bce59"
+      ],
+      "evidence_groups": [
+        {
+          "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+          "any_chunk_ids": [
+            "6540549695546be4abdc",
+            "6135591623d9e60bce59"
+          ]
+        }
+      ],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "retrieve_chunks"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "仅解释研究内容，不执行攻击",
+        "中文且不联网",
+        "概括感染与触发"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "memory_checks": [
+        "本地限定",
+        "中文",
+        "目标论文 Zombie Agents"
+      ],
+      "compression_required": true,
+      "setup": "逐轮执行前 7 轮并确认摘要压缩成功"
+    },
+    {
+      "id": "PA-025",
+      "category": "工具选择",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请看当前个人语料库。",
+        "准确告诉我库里共有多少篇论文，不要根据检索结果估计。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "list_corpus_papers"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "调用论文清单并依据真实返回计数",
+        "在冻结快照且不增加共享语料时应为 32 篇",
+        "说明计数范围"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "retrieval_metric_applicable": false,
+      "expected_inventory_count": 32
+    },
+    {
+      "id": "PA-026",
+      "category": "工具选择",
+      "corpus_scope": "仅用户 local-user 的本地 SQLite 论文语料，不使用共享语料和在线来源",
+      "user_turns": [
+        "请查阅本地语料清单。",
+        "是否同时收录了 GEAR 溯因推理论文和 GEAR 图像生成论文？分别写出完整标题。"
+      ],
+      "scored_turn": 2,
+      "required_paper_ids": [],
+      "relevant_chunk_ids": [],
+      "evidence_groups": [],
+      "evidence_label_status": "代表性正例，未穷举；应复核其他相关片段",
+      "expected_tools": {
+        "required_all": [
+          "list_corpus_papers"
+        ],
+        "allowed_alternatives": [],
+        "forbidden": [
+          "search_arxiv",
+          "import_arxiv"
+        ]
+      },
+      "success_criteria": [
+        "依据论文清单确认两篇",
+        "给出完整标题",
+        "不将两篇混成一篇"
+      ],
+      "judge": "人工或经校准的模型裁判复核",
+      "tags": [],
+      "retrieval_metric_applicable": false
+    }
+  ]
+}

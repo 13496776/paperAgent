@@ -1,0 +1,191 @@
+{
+  "D1": {
+    "chunk_id": "1a3b6bd582fdd3cc7867",
+    "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents",
+    "excerpt": "while getting better at solving relevant problems. Meta-learning can automate the discovery of novel algorithms, but is limited by first-order improvements and the human design of a suitable search space. The Gödel machine (Schmidhuber, 2007) proposed a theoretical alternative: a self-improving AI t"
+  },
+  "D2": {
+    "chunk_id": "0880dbcf85a56c33ac0d",
+    "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
+    "ordinal": 2,
+    "page_start": null,
+    "page_end": null,
+    "title": "Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents",
+    "excerpt": "to create new, interesting versions of themselves. This open-ended exploration forms a growing tree of diverse, high-quality agents and allows the parallel exploration of many different paths through the search space. Empirically, the DGM automatically improves its coding capabilities (e.g., better "
+  },
+  "M1": {
+    "chunk_id": "c4b5b35da741986218c6",
+    "paper_id": "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Mendel Gödel Machine: Recursive Self-Improving Coding Agents via Comparative Evolution",
+    "excerpt": "eritance, we introduce Mendel Gödel Machine (MGM). In addition to the general single- trajectoryclonal mutation, MGM includes two new types of self-modification that better utilizes evidences accumulated: thereaction-norm mutationedits an agent based on its trajectories on multiple tasks simultaneou"
+  },
+  "S1": {
+    "chunk_id": "268eb2e35cce3eaeaa61",
+    "paper_id": "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee",
+    "ordinal": 2,
+    "page_start": null,
+    "page_end": null,
+    "title": "Safety in Self-Evolving Agents: A Survey",
+    "excerpt": "cross-context reuse of locally useful experience. Existing surveys organize agent safety around components or lifecycle stages; we complement these views by tracing how a single piece of reusable influence, once written into state, changes its carrier, role, authority, and downstream consequences as"
+  },
+  "Z0": {
+    "chunk_id": "6540549695546be4abdc",
+    "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Zombie Agents: Persistent Control of Self-Evolving LLM Agents via Self-Reinforcing Injections",
+    "excerpt": "ZOMBIEAGENTS: PERSISTENTCONTROL OFSELF- EVOLVINGLLM AGENTS VIASELF-REINFORCINGIN- JECTIONS Xianglin Yang, Yufei He, Shuo Ji, Bryan Hooi, Jin Song Dong School of Computing National University of Singapore {xianglin,dcsbhk,dcsdjs}@nus.edu.sg,{yufei.he,jishuo}@u.nus.edu ABSTRACT Self-evolving LLM agent"
+  },
+  "Z1": {
+    "chunk_id": "6135591623d9e60bce59",
+    "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Zombie Agents: Persistent Control of Self-Evolving LLM Agents via Self-Reinforcing Injections",
+    "excerpt": "controlled web content. The attack has two phases. During infection, the agent reads a poisoned source while completing a benign task and writes the pay- load into long-term memory through its normal update process. During trigger, the payload is retrieved or carried forward and causes unauthorized "
+  },
+  "R0": {
+    "chunk_id": "ffd93e7108470e886a36",
+    "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators",
+    "excerpt": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators Alex Iacob1*, Andrej Jovanovi ´c1,3*, William F . Shen1*, Daniel Burkhardt 2, Meghdad Kurmanji 1, Nurbek Tastan4, Lorenzo Sani 1,3, Niccolò Alberto Elia Venanzi 2, Jiayi Nie 1, Ambroise Odonnat 5, Zeyu Cao1, Bill Marino 1, Xinchi Q"
+  },
+  "R1": {
+    "chunk_id": "178c9cd3439e4e00143a",
+    "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators",
+    "excerpt": "uators to improve alongside the agents they guide. OnDeepSWE, theRQGMimproves over its fixed-evaluator baseline by adding a com- plementary agent-as-a-judge code-review signal: a co-evolved reviewer grades coder patches to guide search. At low reasoning effort, theRQGMcoder passes82.1%of held-out ta"
+  },
+  "E1": {
+    "chunk_id": "adbf81a0ff768e905655",
+    "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Evaluation-Free Recursive Self-Improvement for Coding Agents",
+    "excerpt": "ution may encourage benchmark-specific adaptation. We ask a more fundamental question: can coding agents self-improve without downstream task evaluation inside the evolution loop?We introduceExplore-then-Integrate(ELITE), which integrates implementation mechanisms rather than selecting a single expl"
+  },
+  "E2": {
+    "chunk_id": "1393537050b34c3e9328",
+    "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
+    "ordinal": 2,
+    "page_start": null,
+    "page_end": null,
+    "title": "Evaluation-Free Recursive Self-Improvement for Coding Agents",
+    "excerpt": "and operational validity are used inside the loop. OnSWE-bench Pro, ELITEimproves the initial agent from 60.0% to 85.6%, compared with 86.7% for the Darwin Gödel Machine (DGM) and 88.3% for the Huxley-Gödel Machine (HGM), while using zero candidate task evaluations and reducing observed wall-clock e"
+  },
+  "K0": {
+    "chunk_id": "4480b9e35b92cf971649",
+    "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Memento-Skills: Let Agents Design Agents",
+    "excerpt": "Memento-Skills: Let Agents Design Agents Memento-Team Abstract We introduceMemento-Skills, a generalist, continually-learnable LLM agent system that functions as anagent-designing agent: it autonomously constructs, adapts, and improves task-specific agents through experience. The system is built on "
+  },
+  "K1": {
+    "chunk_id": "e22e07f044bd2aa1b3fb",
+    "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Memento-Skills: Let Agents Design Agents",
+    "excerpt": "expands its skill library based on new experience. This closed-loop design enablescontinual learning without updating LLM parameters, as all adaptation is realised through the evolution of externalised skills and prompts. Unlike prior approaches that rely on human-designed agents, Memento-Skills ena"
+  },
+  "H1": {
+    "chunk_id": "65beb26f9e9c03d27674",
+    "paper_id": "21f837c83ca55a11e21ba33a2da12de27643a94baa4ca2247599b63a7b2b26a3",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "HarnessNet: Feedback-driven Hierarchical Joint Harness Evolution for Multi-agent Systems",
+    "excerpt": "y lack permission to access the environmentfeedbackwhichisfortheentireMAS.Toaddress thesechallenges,weproposeHarnessNet,aframeworkforhi- erarchicalharnessevolutioninMAS.Itsbasicunit,Agentron, consistsofanevolvableforwardharness,afoundationmodel, and a local optimizer that can observe and modify only"
+  },
+  "T1": {
+    "chunk_id": "ceee659831483e01fe6c",
+    "paper_id": "958ca73a34cca57a4f6d4e977e3eff70161fb15cb3fa70476d9a73f978755979",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "Small but Mighty: Test Suites as Improvement Signals for Self-Evolving Agents",
+    "excerpt": "anging rewrites, rejecting only a quarter of them. We instead take test feedback as the executable sig- nal, and search for test suites that are both small and strong with a quality–diversity evolutionary algorithm, so that the signal is dense and informative.TESEARCH treats suite size as a behavior"
+  },
+  "A0": {
+    "chunk_id": "1beb3802f47d9fd7b744",
+    "paper_id": "b5a9913acd1f94b2e6e0658c33875b501d662d8bb720694a3f4181787726ef9b",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents",
+    "excerpt": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents Hongwei Yao1†, Yiming Liu2†, Meihui Chen4, Jieling Chen4, Zikun Chen2, Yiling He3\u0000 , Wangze Ni2, Cong Wang1, Kui Ren2∗ Abstract Cowork agents may complete benign tasks while disclos- ing protected data, manipulating unauthorized"
+  },
+  "A1": {
+    "chunk_id": "487d0e9ab03f47abd55e",
+    "paper_id": "b5a9913acd1f94b2e6e0658c33875b501d662d8bb720694a3f4181787726ef9b",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents",
+    "excerpt": "rs, six execution spaces, and 48 web-service APIs. To move beyond static payloads, we propose a reward-guided beam search method that jointly optimizes attack effectiveness and task utility, while reflec- tion diagnoses failed execution checkpoint and guides pay- load revision. Besides, we propose a"
+  },
+  "C0": {
+    "chunk_id": "1a2371a6734ab540a437",
+    "paper_id": "e5ae5d2219c16f6a128430e9661a83068a498feb6b1b482af38e23e54f2b1456",
+    "ordinal": 0,
+    "page_start": 1,
+    "page_end": 1,
+    "title": "Automatic Controllable Colorization via Imagination",
+    "excerpt": "Automatic Controllable Colorization via Imagination Xiaoyan Cong3 Yue Wu4 Qifeng Chen2 Chenyang Lei1* 1CAIR, HKISI-CAS 2HKUST 3Zhejiang University 4Huawei Noah’s Ark Lab Abstract We propose a framework for automatic colorization that allows for iterative editing and modifications. The core of our fr"
+  },
+  "G1": {
+    "chunk_id": "8e5d8e5bbae120d9e3a7",
+    "paper_id": "26a3f2f56c2e5a8f50770b049206ee08303c8958c5b7261c823143cd13960e7d",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "GEAR: A General Evaluation Framework for Abductive Reasoning",
+    "excerpt": "gm that overcomes limitations of prior approaches. GEAR eval- uates a set of hypotheses using three metrics:consistency(each hypothesis cor- rectly explains the given observations),generalizability(consistent hypotheses make meaningful predictions on unseen inputs), anddiversity(the set of hy- pothe"
+  },
+  "U0": {
+    "chunk_id": "ca86b44c468fb4b0b397",
+    "paper_id": "4c12a75ca55d2aba7838e104f8555cdeea046a22cf5e8412a94cbf908d670729",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "UI-Evol: Automatic Knowledge Evolving for Computer Use Agents",
+    "excerpt": "Ziyun Zhang * 1 Xinyi Liu * 1 Xiaoyi Zhang 2 Jun Wang2 Gang Chen 2 Yan Lu2 Abstract External knowledge has played a crucial role in the recent development of computer use agents. We identify a critical knowledge-execution gap: retrieved knowledge often fails to translate into effective real-world ta"
+  },
+  "W0": {
+    "chunk_id": "ec21eadbdf91100fbb9b",
+    "paper_id": "285d9cbc4334b75b5162686e89b01014261823c0aa2b60c74769823ceb7ab147",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Self-Evolving Agentic Workflows via Semantic Decomposition of Complex Tasks",
+    "excerpt": "Self-Evolving Agentic Workflows via Semantic Decomposition of Complex Tasks Zichuan Fu1 Junjia Qi1 Xian Wu2 Wenlin Zhang1 Yimin Deng1 Kaifeng Guo1 Xiangyu Zhao1∗ 1City University of Hong Kong 2Tencent Jarvis Lab zc.fu@my.cityu.edu.hk,xianzhao@cityu.edu.hk Abstract Agentic workflows organize complex "
+  },
+  "P1": {
+    "chunk_id": "7ff17fef4bc1ad6196e5",
+    "paper_id": "14895aa0c1c2f55760463236e104343075e84663fa8d2dc9b24337b50217c8c2",
+    "ordinal": 1,
+    "page_start": null,
+    "page_end": null,
+    "title": "A Self-Evolving Agent for Longitudinal Personal Health Management",
+    "excerpt": "al large language models and agents show strong single-encounter question answering and evidence interpretation but struggle to accumulate and govern experience across encounters. We present HealthJev, an open-source agent separating shared safety rules and medical knowledge from a private longitudi"
+  }
+}
