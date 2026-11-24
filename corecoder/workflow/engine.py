@@ -17,8 +17,10 @@ WORKERS = {
     "delivery": "综合证据，撰写并修订带引用的研究成果",
     "evaluation": "评估结果、计算指标和审查链路",
 }
-MAX_WORKFLOW_TOOL_CALLS = 50
-MAX_PER_TOOL_CALLS = 10
+MAX_WORKFLOW_TOOL_CALLS = 100
+MAX_PER_TOOL_CALLS = 50
+SESSION_LOCK_SECONDS = 3600
+SESSION_LOCK_RENEW_SECONDS = 60
 _retrieval_locks = weakref.WeakValueDictionary()
 _retrieval_locks_guard = threading.Lock()
 
@@ -178,10 +180,22 @@ class Supervisor:
         self.tools = tools or ResearchTools()
 
     def _locked(self, user, session, action):
-        lock = self.store.redis.lock(self.store._key(user, session) + ":lock", timeout=3600, blocking_timeout=0)
+        lock = self.store.redis.lock(self.store._key(user, session) + ":lock", timeout=SESSION_LOCK_SECONDS,
+                                     blocking_timeout=0, thread_local=False)
         if not lock.acquire():
             raise RuntimeError("session is already running")
+        stop_renewal = threading.Event()
+
+        def renew_lock():
+            while not stop_renewal.wait(SESSION_LOCK_RENEW_SECONDS):
+                try:
+                    lock.extend(SESSION_LOCK_SECONDS, replace_ttl=True)
+                except Exception:  # noqa: BLE001
+                    return
+
+        renewal = threading.Thread(target=renew_lock, name="paperagent-session-lock", daemon=True)
         try:
+            renewal.start()
             state = self.store.load(user, session)
             if "workflow_revision" not in state:
                 archived = self.store.latest_completed_workflow(user, session)
@@ -203,6 +217,9 @@ class Supervisor:
                     self.store.save_workflow_json(user, session, workflow)
             return action(state, save)
         finally:
+            stop_renewal.set()
+            if renewal.is_alive():
+                renewal.join(timeout=1)
             if lock.owned():
                 lock.release()
 
@@ -444,7 +461,7 @@ class Supervisor:
                     task["messages"] = messages
                     self._recover_tool_receipts(task, messages)
                     save()
-                    # A final model decision is still permitted after all 50 calls.
+                    # A final model decision is still permitted after the tool budget is exhausted.
                     for _ in range(MAX_WORKFLOW_TOOL_CALLS + 1):
                         if self._apply_control(user, session, workflow, save):
                             return workflow

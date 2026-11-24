@@ -131,7 +131,7 @@ def test_evidence_reaches_delivery_through_analysis(tmp_path):
 
 def test_tool_budgets_are_workflow_wide_and_survive_resume(tmp_path):
     plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
-    calls = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(11)]
+    calls = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(51)]
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
     supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=calls),
                                     LLMResponse(content="partial evidence")]),
@@ -140,8 +140,8 @@ def test_tool_budgets_are_workflow_wide_and_survive_resume(tmp_path):
     result = supervisor.resume("alice", "session")
     workflow = supervisor.get("alice", "session")["workflow"]
     assert result["status"] == "completed" and result["budget_exhausted"]
-    assert "不完整" in result["result"] and len(workflow["tasks"][0]["calls"]) == 10
-    assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 10
+    assert "不完整" in result["result"] and len(workflow["tasks"][0]["calls"]) == 50
+    assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 50
 
 
 def test_total_tool_budget_and_final_model_decision(tmp_path):
@@ -152,7 +152,7 @@ def test_total_tool_budget_and_final_model_decision(tmp_path):
             return "ok"
 
     plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
-    calls = [ToolCall(str(i), f"tool{i // 10}", {}) for i in range(50)]
+    calls = [ToolCall(str(i), f"tool{i // 50}", {}) for i in range(100)]
     for extra in (False, True):
         store = SessionStore(fakeredis.FakeRedis(), tmp_path / f"memory-{extra}.sqlite")
         final = LLMResponse(tool_calls=[ToolCall("51", "tool5", {})]) if extra else LLMResponse(content="done")
@@ -164,7 +164,7 @@ def test_total_tool_budget_and_final_model_decision(tmp_path):
                 supervisor.resume("alice", "session")
         else:
             assert supervisor.resume("alice", "session")["result"].endswith("done")
-        assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 50
+        assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 100
 
 
 def test_failed_tool_calls_count_across_tasks_and_show_error(tmp_path):
@@ -173,7 +173,7 @@ def test_failed_tool_calls_count_across_tasks_and_show_error(tmp_path):
             raise TimeoutError()
 
     plan = {"tasks": [{"id": str(i), "worker": "retrieval", "goal": "search", "depends_on": []} for i in range(2)]}
-    first = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(10)]
+    first = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(50)]
     responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=first), LLMResponse(content="failed"),
                  LLMResponse(content="无法取得证据")]
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
@@ -222,6 +222,40 @@ def test_pause_during_tool_call_and_resume_without_reexecution(tmp_path):
     assert result["status"] == "completed"
     assert calls == ["test"]
     assert result["tasks"][0]["messages"][-2]["role"] == "tool"
+
+
+def test_long_workflow_renews_session_lock(tmp_path, monkeypatch):
+    import threading
+    import time
+
+    from corecoder.workflow import engine
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class SlowModel:
+        def chat(self, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return LLMResponse(content='{"tasks":[{"id":"one","worker":"analysis","goal":"answer","depends_on":[]}]}')
+
+    monkeypatch.setattr(engine, "SESSION_LOCK_SECONDS", 1)
+    monkeypatch.setattr(engine, "SESSION_LOCK_RENEW_SECONDS", 0.1)
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(SlowModel(), store)
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(supervisor.start("alice", "session", "question")))
+    thread.start()
+    try:
+        assert entered.wait(2)
+        time.sleep(1.2)
+        with pytest.raises(RuntimeError, match="already running"):
+            supervisor.start("alice", "session", "another question")
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert outcome[0]["status"] == "awaiting_approval"
 
 
 def test_retrieval_timeout_records_failure_and_blocks_overlapping_retry(tmp_path, monkeypatch):
