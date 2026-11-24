@@ -28,9 +28,9 @@ python run_paperagent.py --setup
 
 执行 `python run_paperagent.py`。首次运行会创建 `paperagent.config.json` 并提示编辑该文件。填写 `deepseek_api_key` 或 `openai_api_key`，以及 `embedding_model`、`reranker_model` 的本地路径或 Hugging Face 名称。JSON 中 Windows 路径使用正斜杠（例如 `D:/models/bge-m3`）或双反斜杠。配置文件包含密钥，已加入 `.gitignore`，请勿上传或分享。
 
-再次执行 `python run_paperagent.py`。脚本读取配置，生成本机 JWT，启动后端和前端，打开一次性本地登录链接并自动填入令牌。若浏览器未自动打开，可复制终端中的一次性链接；链接有效期为 10 分钟且只能使用一次。也可将终端中的备用令牌手动粘贴到“访问令牌”。默认优先使用已配置的 DeepSeek；仅配置 OpenAI 时默认选择 OpenAI，也可在网页手动切换。Ctrl+C 停止脚本启动的服务。令牌有效期为 24 小时；每次启动默认生成新的签名密钥和令牌。
+再次执行 `python run_paperagent.py`。脚本读取配置，生成本机 JWT，启动后端和前端，打开一次性本地登录链接并自动填入令牌。若浏览器未自动打开，可复制终端中的一次性链接；链接有效期为 10 分钟且只能使用一次。也可将终端中的备用令牌手动粘贴到“访问令牌”。默认优先使用已配置的 DeepSeek；仅配置 OpenAI 时默认选择 OpenAI，也可在网页手动切换。Ctrl+C 停止脚本启动的服务。令牌有效期为 24 小时；启动时生成新令牌，并将默认签名密钥保存在项目目录的 .paperagent-jwt-key 文件中供后续重启使用。
 
-这里的 24 小时从 JWT 签发时间开始计算，使用令牌不会自动延长有效期；10 分钟只限制一次性登录链接，并不限制换取后的 JWT。自行运行后端时由外部身份服务签发的 JWT，其有效期由签发方的 `exp` 决定，项目不会修改它。默认每次重启一键启动脚本会生成新的签名密钥，旧令牌可能因此在到期前失效。
+这里的 24 小时从 JWT 签发时间开始计算，使用令牌不会自动延长有效期；10 分钟只限制一次性登录链接，并不限制换取后的 JWT。自行运行后端时由外部身份服务签发的 JWT，其有效期由签发方的 `exp` 决定，项目不会修改它。保管好 .paperagent-jwt-key 并随数据库备份，删除或更换密钥会使此前签发的令牌失效。设置 CORECODER_JWT_KEY 时以该环境变量为准。升级前未保存的旧签名密钥无法恢复，因此旧令牌需要重新获取。
 
 脚本使用已有 Redis。如果默认地址的 Redis 未运行且 Docker 可用，会启动一个本地 Redis 容器并在退出时停止，数据保存在 Docker 卷 `paperagent-redis-data`。使用其他 Redis 地址时需要自行启动该服务。执行 `python run_paperagent.py --check` 可运行 Python 测试和前端构建。Linux 或 macOS 也可使用此脚本，虚拟环境使用 `source .venv/bin/activate` 激活。
 

@@ -22,5 +22,6 @@ web/dist/
 *.sqlite3-wal
 /evaluation_results/
 paperagent.config.json
+.paperagent-jwt-*
 paperagent-chroma/
 *-chroma/

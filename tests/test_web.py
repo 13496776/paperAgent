@@ -12,11 +12,27 @@ from corecoder import web
 from corecoder.llm import LLMResponse
 from corecoder.persistent import SessionStore
 from corecoder.workflow.engine import Supervisor
+from run_paperagent import local_jwt_key
 
 
 class Model:
     def chat(self, **kwargs):
         return LLMResponse(content='{"tasks":[{"id":"a","worker":"delivery","goal":"write","depends_on":[]}]}')
+
+
+def test_local_signing_key_survives_restart_and_token_still_expires(tmp_path):
+    from corecoder.persistent import JWTAuthenticator
+
+    path = tmp_path / "signing-key"
+    first = local_jwt_key(path)
+    now = int(time.time())
+    claims = {"sub": "local-user", "iss": "issuer", "aud": "app", "iat": now, "exp": now + 60}
+    token = jwt.encode(claims, first, algorithm="HS256")
+    restarted = JWTAuthenticator(local_jwt_key(path), "issuer", "app")
+    assert restarted.authenticate(token) == "local-user"
+    claims["exp"] = now - 1
+    with pytest.raises(jwt.ExpiredSignatureError):
+        restarted.authenticate(jwt.encode(claims, first, algorithm="HS256"))
 
 
 def test_authenticated_session_plan(tmp_path, monkeypatch):

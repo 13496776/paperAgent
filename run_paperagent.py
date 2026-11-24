@@ -7,6 +7,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -16,6 +17,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CONFIG = ROOT / "paperagent.config.json"
 EXAMPLE = ROOT / "paperagent.config.example.json"
+JWT_KEY_FILE = ROOT / ".paperagent-jwt-key"
+
+
+def local_jwt_key(path=JWT_KEY_FILE):
+    """Persist the local signing key so unexpired tokens survive a restart."""
+    if path.exists():
+        key = path.read_text(encoding="utf-8").strip()
+        if not key:
+            raise RuntimeError(f"Local JWT key file is empty: {path}")
+        return key
+    fd, temporary = tempfile.mkstemp(prefix=".paperagent-jwt-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write(secrets.token_urlsafe(48))
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            pass
+        key = path.read_text(encoding="utf-8").strip()
+        if not key:
+            raise RuntimeError(f"Local JWT key file is empty: {path}")
+        return key
+    finally:
+        os.unlink(temporary)
 
 
 def check_port(port):
@@ -141,7 +166,8 @@ def main():
     try:
         redis_name = ensure_redis(os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0"))
         os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6379/0")
-        os.environ.setdefault("CORECODER_JWT_KEY", secrets.token_urlsafe(48))
+        if "CORECODER_JWT_KEY" not in os.environ:
+            os.environ["CORECODER_JWT_KEY"] = local_jwt_key()
         os.environ.setdefault("CORECODER_JWT_ISSUER", "paperagent-local")
         os.environ.setdefault("CORECODER_JWT_AUDIENCE", "paperagent-web")
         now = int(time.time())
