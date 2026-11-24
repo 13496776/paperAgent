@@ -36,6 +36,10 @@ def test_supervisor_plan_approval_dependencies_and_tool_access(tmp_path):
     assert supervisor.resume("alice", "session")["result"] == "Answer [p1]"
     state = supervisor.get("alice", "session")
     assert state["workflow"]["tasks"][0]["calls"][0]["result"][0]["id"] == "p1"
+    report_path = next((tmp_path / "workflow_results").glob("*.json"))
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["workflow"]["tasks"][0]["calls"][0]["arguments"] == {"query": "test"}
+    assert report["workflow"]["tasks"][0]["calls"][0]["result"][0]["text"] == "test"
     assert supervisor.get("bob", "session").get("workflow") is None
     with pytest.raises(ValueError):
         ResearchTools(Retriever()).execute("delivery", "retrieve_chunks", {"query": "x"})

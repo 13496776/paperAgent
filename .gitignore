@@ -21,6 +21,7 @@ web/dist/
 *.sqlite3-shm
 *.sqlite3-wal
 /evaluation_results/
+workflow_results/
 paperagent.config.json
 .paperagent-jwt-*
 paperagent-chroma/

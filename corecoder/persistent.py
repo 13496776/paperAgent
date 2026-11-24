@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 import jwt
 
@@ -40,6 +43,7 @@ class SessionStore:
     def __init__(self, redis, sqlite_path):
         self.redis = redis
         self.sqlite_path = str(sqlite_path)
+        self.results_path = Path(self.sqlite_path).absolute().parent / "workflow_results"
         with sqlite3.connect(self.sqlite_path) as db:
             db.execute("CREATE TABLE IF NOT EXISTS summaries (id TEXT PRIMARY KEY, owner TEXT NOT NULL, "
                        "session TEXT NOT NULL, summary TEXT NOT NULL, created REAL NOT NULL)")
@@ -48,6 +52,9 @@ class SessionStore:
                        "revision INTEGER NOT NULL, workflow TEXT NOT NULL, PRIMARY KEY (owner, session, workflow_id))")
             db.execute("CREATE INDEX IF NOT EXISTS completed_workflows_revision "
                        "ON completed_workflows (owner, session, revision DESC)")
+            archived = db.execute("SELECT owner, session, workflow FROM completed_workflows").fetchall()
+        for owner, session, workflow in archived:
+            self.save_workflow_json(owner, session, json.loads(workflow), only_if_missing=True)
 
     @staticmethod
     def _key(user, session):
@@ -92,6 +99,29 @@ class SessionStore:
                 "WHERE excluded.revision > completed_workflows.revision",
                 (user, session, workflow["id"], workflow["revision"], json.dumps(workflow, ensure_ascii=False)),
             )
+
+    def save_workflow_json(self, user, session, workflow, only_if_missing=False):
+        identity = json.dumps([user, session, workflow["id"]], ensure_ascii=False).encode("utf-8")
+        filename = hashlib.sha256(identity).hexdigest() + ".json"
+        self.results_path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target = self.results_path / filename
+        if only_if_missing and target.exists():
+            return
+        fd, temporary = tempfile.mkstemp(prefix=".workflow-", suffix=".tmp", dir=self.results_path)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump({"user": user, "session": session, "workflow": workflow}, output, ensure_ascii=False, indent=2)
+                output.write("\n")
+            if only_if_missing:
+                try:
+                    os.link(temporary, target)
+                except FileExistsError:
+                    pass
+            else:
+                os.replace(temporary, target)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
 
     def latest_completed_workflow(self, user, session):
         with sqlite3.connect(self.sqlite_path) as db:

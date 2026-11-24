@@ -141,6 +141,8 @@ class Supervisor:
                             raise RuntimeError("session lock lost; refusing to archive workflow")
                         self.store.save_completed_workflow(user, session, workflow)
                 self.store.save(user, session, state, lock)
+                if workflow is not None:
+                    self.store.save_workflow_json(user, session, workflow)
             return action(state, save)
         finally:
             if lock.owned():

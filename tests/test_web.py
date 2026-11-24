@@ -1,3 +1,4 @@
+import json
 import time
 
 import pytest
@@ -87,8 +88,15 @@ def test_completed_workflow_survives_redis_expiry(tmp_path, monkeypatch):
     assert completed["status"] == "completed"
     assert completed["result"] == completed["tasks"][0]["result"] == "研究结果"
     assert completed["trace"]
+    files = list((tmp_path / "workflow_results").glob("*.json"))
+    assert len(files) == 1
+    saved = json.loads(files[0].read_text(encoding="utf-8"))
+    assert saved == {"user": "alice", "session": "demo", "workflow": completed}
+
+    files[0].unlink()
 
     store = SessionStore(fakeredis.FakeRedis(), path)
+    assert json.loads(files[0].read_text(encoding="utf-8"))["workflow"] == completed
     assert client.get(endpoint, headers=alice).json()["workflow"] == completed
     assert "workflow" not in client.get(endpoint, headers=headers("bob")).json()
     assert "workflow" not in client.get("/api/sessions/other", headers=alice).json()
@@ -100,6 +108,7 @@ def test_completed_workflow_survives_redis_expiry(tmp_path, monkeypatch):
     assert client.get(endpoint, headers=alice).json()["workflow"] == plan.json()
     second = client.post(endpoint + "/resume", json={}, headers=alice)
     assert second.status_code == 200
+    assert len(list((tmp_path / "workflow_results").glob("*.json"))) == 2
     store.redis.delete(store._key("alice", "demo"))
     assert client.get(endpoint, headers=alice).json()["workflow"] == second.json()
 
