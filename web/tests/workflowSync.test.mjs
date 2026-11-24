@@ -19,3 +19,13 @@ test('old sessions cannot overwrite the newly selected session', () => {
   assert.equal(sync.accept('two', { revision: 1 }, current), true)
   assert.equal(sync.accept('one', { revision: 20 }, previous), false)
 })
+
+test('explicit reload accepts an archived result after a newer live workflow expired', () => {
+  const sync = createWorkflowSync()
+  const live = sync.begin('one')
+  assert.equal(sync.accept('one', { revision: 9 }, live), true)
+  const delayed = sync.begin('one')
+  const reload = sync.begin('one', true)
+  assert.equal(sync.accept('one', { revision: 5 }, reload), true)
+  assert.equal(sync.accept('one', { revision: 9 }, delayed), false)
+})

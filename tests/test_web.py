@@ -38,6 +38,56 @@ def test_authenticated_session_plan(tmp_path, monkeypatch):
     assert client.get("/api/sessions/demo", headers=headers).json()["workflow"]["question"] == "Research?"
 
 
+def test_completed_workflow_survives_redis_expiry(tmp_path, monkeypatch):
+    key = "test-key-that-is-long-enough-for-hs256"
+    monkeypatch.setenv("CORECODER_JWT_KEY", key)
+    monkeypatch.setenv("CORECODER_JWT_ISSUER", "issuer")
+    monkeypatch.setenv("CORECODER_JWT_AUDIENCE", "app")
+
+    class ResearchModel(Model):
+        def chat(self, **kwargs):
+            if "research supervisor" in kwargs["messages"][0]["content"]:
+                return super().chat(**kwargs)
+            return LLMResponse(content="研究结果")
+
+    path = tmp_path / "test.sqlite"
+    store = SessionStore(fakeredis.FakeRedis(), path)
+    monkeypatch.setattr(web, "get_store", lambda: store)
+    monkeypatch.setattr(web, "supervisor", lambda provider, user: Supervisor(ResearchModel(), store))
+    client = TestClient(web.app)
+
+    def headers(user):
+        now = int(time.time())
+        token = jwt.encode({"sub": user, "iss": "issuer", "aud": "app", "iat": now, "exp": now + 60},
+                           key, algorithm="HS256")
+        return {"Authorization": f"Bearer {token}"}
+
+    endpoint = "/api/sessions/demo"
+    alice = headers("alice")
+    assert client.post(endpoint + "/plan", json={"question": "First question?"}, headers=alice).status_code == 200
+    done = client.post(endpoint + "/resume", json={}, headers=alice)
+    assert done.status_code == 200
+    completed = done.json()
+    assert completed["status"] == "completed"
+    assert completed["result"] == completed["tasks"][0]["result"] == "研究结果"
+    assert completed["trace"]
+
+    store = SessionStore(fakeredis.FakeRedis(), path)
+    assert client.get(endpoint, headers=alice).json()["workflow"] == completed
+    assert "workflow" not in client.get(endpoint, headers=headers("bob")).json()
+    assert "workflow" not in client.get("/api/sessions/other", headers=alice).json()
+    assert client.post(endpoint + "/resume", json={}, headers=alice).status_code == 400
+
+    plan = client.post(endpoint + "/plan", json={"question": "Second question?"}, headers=alice)
+    assert plan.status_code == 200
+    assert plan.json()["revision"] > completed["revision"]
+    assert client.get(endpoint, headers=alice).json()["workflow"] == plan.json()
+    second = client.post(endpoint + "/resume", json={}, headers=alice)
+    assert second.status_code == 200
+    store.redis.delete(store._key("alice", "demo"))
+    assert client.get(endpoint, headers=alice).json()["workflow"] == second.json()
+
+
 def test_local_sign_in_is_one_use_and_produces_valid_jwt(monkeypatch):
     key = "test-key-that-is-long-enough-for-hs256"
     monkeypatch.setenv("CORECODER_JWT_KEY", key)

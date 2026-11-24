@@ -136,9 +136,9 @@ function elapsed(activity: Activity) {
 }
 const names: Record<string,string> = { ingestion: '数据接入', analysis: '推理分析', retrieval: '文献检索', delivery: '生成交付', evaluation: '测评运维' }
 const labels: Record<string,string> = { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败', awaiting_approval: '等待确认', cancelled: '已取消', paused: '已暂停', planning: '规划中', interrupted: '已中断' }
-async function request(path: string, body?: object) {
+async function request(path: string, body?: object, reload = false) {
   const sessionId = session.value
-  const requestId = sync.begin(sessionId)
+  const requestId = sync.begin(sessionId, reload)
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}${path}`, {
     method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -206,7 +206,7 @@ async function act(action: 'plan' | 'resume' | 'load') {
       const result = await request('/resume', { provider: provider.value })
       applyWorkflow(result, result.data)
     }
-    const result = await request('')
+    const result = await request('', undefined, action === 'load')
     applyWorkflow(result, result.data.workflow || null)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '请求失败'

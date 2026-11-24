@@ -4,17 +4,19 @@ export function createWorkflowSync() {
   let revision = -1
   let request = 0
   let appliedRequest = 0
+  let firstRequest = 0
   return {
-    begin(sessionId) {
-      if (session !== sessionId) {
+    begin(sessionId, reload = false) {
+      if (session !== sessionId || reload) {
         session = sessionId
         revision = -1
         appliedRequest = 0
+        firstRequest = request + 1
       }
       return ++request
     },
     accept(sessionId, workflow, requestId) {
-      if (session !== sessionId) return false
+      if (session !== sessionId || requestId < firstRequest) return false
       const nextRevision = typeof workflow?.revision === 'number' ? workflow.revision : -1
       if (nextRevision < revision || (nextRevision === revision && requestId < appliedRequest)) return false
       revision = nextRevision

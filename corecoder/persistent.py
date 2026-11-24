@@ -31,10 +31,10 @@ SESSION_TTL_SECONDS = 24 * 60 * 60
 
 
 class SessionStore:
-    """Redis checkpoint plus immutable SQLite summary snapshots.
+    """Redis checkpoints and SQLite summaries and completed workflows.
 
     Redis retains active history and workflow state for 24 hours since the
-    last read or write. SQLite stores immutable summary snapshots.
+    last read or write. SQLite retains summaries and completed results.
     """
 
     def __init__(self, redis, sqlite_path):
@@ -43,6 +43,11 @@ class SessionStore:
         with sqlite3.connect(self.sqlite_path) as db:
             db.execute("CREATE TABLE IF NOT EXISTS summaries (id TEXT PRIMARY KEY, owner TEXT NOT NULL, "
                        "session TEXT NOT NULL, summary TEXT NOT NULL, created REAL NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS completed_workflows ("
+                       "owner TEXT NOT NULL, session TEXT NOT NULL, workflow_id TEXT NOT NULL, "
+                       "revision INTEGER NOT NULL, workflow TEXT NOT NULL, PRIMARY KEY (owner, session, workflow_id))")
+            db.execute("CREATE INDEX IF NOT EXISTS completed_workflows_revision "
+                       "ON completed_workflows (owner, session, revision DESC)")
 
     @staticmethod
     def _key(user, session):
@@ -78,6 +83,23 @@ class SessionStore:
         with sqlite3.connect(self.sqlite_path) as db:
             db.execute("INSERT INTO summaries VALUES (?, ?, ?, ?, ?)", (snapshot, user, session, summary, time.time()))
         return snapshot
+
+    def save_completed_workflow(self, user, session, workflow):
+        with sqlite3.connect(self.sqlite_path) as db:
+            db.execute(
+                "INSERT INTO completed_workflows (owner, session, workflow_id, revision, workflow) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (owner, session, workflow_id) DO UPDATE SET revision=excluded.revision, workflow=excluded.workflow "
+                "WHERE excluded.revision > completed_workflows.revision",
+                (user, session, workflow["id"], workflow["revision"], json.dumps(workflow, ensure_ascii=False)),
+            )
+
+    def latest_completed_workflow(self, user, session):
+        with sqlite3.connect(self.sqlite_path) as db:
+            row = db.execute(
+                "SELECT workflow FROM completed_workflows WHERE owner=? AND session=? ORDER BY revision DESC LIMIT 1",
+                (user, session),
+            ).fetchone()
+        return json.loads(row[0]) if row else None
 
     def summary(self, user, session, snapshot):
         if not snapshot:

@@ -125,12 +125,21 @@ class Supervisor:
             raise RuntimeError("session is already running")
         try:
             state = self.store.load(user, session)
+            if "workflow_revision" not in state:
+                archived = self.store.latest_completed_workflow(user, session)
+                if archived:
+                    state["workflow_revision"] = archived["revision"]
+
             def save():
                 workflow = state.get("workflow")
                 if workflow is not None:
                     revision = state.get("workflow_revision", 0) + 1
                     state["workflow_revision"] = revision
                     workflow["revision"] = revision
+                    if workflow["status"] == "completed":
+                        if not lock.owned():
+                            raise RuntimeError("session lock lost; refusing to archive workflow")
+                        self.store.save_completed_workflow(user, session, workflow)
                 self.store.save(user, session, state, lock)
             return action(state, save)
         finally:
@@ -257,13 +266,17 @@ class Supervisor:
     def get(self, user, session):
         state = self.store.load(user, session)
         workflow = state.get("workflow")
-        if workflow:
-            for task in workflow.get("tasks", []):
-                activities = task.get("activities", [])
-                if activities and activities[-1].get("status") == "running":
-                    activity = activities[-1]
-                    activity["elapsed_ms"] = round(max(0, time.time() - activity["started_at"]) * 1000, 2)
-        if workflow and workflow.get("id") and workflow.get("status") in ("planning", "running"):
+        if not workflow:
+            archived = self.store.latest_completed_workflow(user, session)
+            if archived:
+                state["workflow"] = archived
+            return state
+        for task in workflow.get("tasks", []):
+            activities = task.get("activities", [])
+            if activities and activities[-1].get("status") == "running":
+                activity = activities[-1]
+                activity["elapsed_ms"] = round(max(0, time.time() - activity["started_at"]) * 1000, 2)
+        if workflow.get("id") and workflow.get("status") in ("planning", "running"):
             requested = self.store.redis.get(self._control_key(user, session, workflow))
             if requested:
                 workflow["control_requested"] = requested.decode("utf-8") if isinstance(requested, bytes) else requested
