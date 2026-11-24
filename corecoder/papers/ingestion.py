@@ -24,27 +24,42 @@ _ARXIV_ID = re.compile(r"(?:\d{4}\.\d{4,5}|[a-z][a-z.-]*/\d{7})(?:v\d+)?\Z")
 _arxiv_lock = threading.Lock()
 
 
-def _arxiv_operation(operation):
-    with _arxiv_lock:
-        identity = str(os.getuid()) if hasattr(os, "getuid") else os.environ.get("USERNAME", "default")
-        prefix = Path(tempfile.gettempdir()) / ("paperagent-arxiv-" + hashlib.sha256(identity.encode()).hexdigest()[:16])
-        state = prefix.with_suffix(".time")
-        with FileLock(str(prefix) + ".lock"):
-            if state.exists():
+def _arxiv_operation(operation, *, search_interval=None):
+    identity = str(os.getuid()) if hasattr(os, "getuid") else os.environ.get("USERNAME", "default")
+    prefix = Path(tempfile.gettempdir()) / ("paperagent-arxiv-" + hashlib.sha256(identity.encode()).hexdigest()[:16])
+    state = prefix.with_suffix(".time")
+    search_state = prefix.with_suffix(".search.time")
+
+    def remaining(path, interval):
+        if not path.exists():
+            return 0.0
+        try:
+            previous = float(path.read_text(encoding="ascii"))
+            if not math.isfinite(previous):
+                raise ValueError("invalid timestamp")
+        except (ValueError, UnicodeError):
+            previous = time.time()
+            path.write_text(str(previous), encoding="ascii")
+        return max(0.0, interval - max(0.0, time.time() - previous))
+
+    while True:
+        with _arxiv_lock, FileLock(str(prefix) + ".lock"):
+            delay = remaining(state, 3.0)
+            if search_interval is not None:
+                delay = max(delay, remaining(search_state, search_interval))
+            if delay <= 0:
+                timestamp = str(time.time())
+                state.write_text(timestamp, encoding="ascii")
+                if search_interval is not None:
+                    search_state.write_text(timestamp, encoding="ascii")
                 try:
-                    previous = float(state.read_text(encoding="ascii"))
-                    if not math.isfinite(previous):
-                        raise ValueError("invalid timestamp")
-                except (ValueError, UnicodeError):
-                    previous = time.time()
-                delay = 3.0 - max(0.0, time.time() - previous)
-                if delay > 0:
-                    time.sleep(delay)
-            state.write_text(str(time.time()), encoding="ascii")
-            try:
-                return operation()
-            finally:
-                state.write_text(str(time.time()), encoding="ascii")
+                    return operation()
+                finally:
+                    timestamp = str(time.time())
+                    state.write_text(timestamp, encoding="ascii")
+                    if search_interval is not None:
+                        search_state.write_text(timestamp, encoding="ascii")
+        time.sleep(delay)
 
 
 def _retry_arxiv(operation):
@@ -111,13 +126,16 @@ def search_arxiv(query, client=None, *, start=0, max_results=10):
         raise ValueError("query must contain 1–500 characters")
     if type(start) is not int or start < 0 or type(max_results) is not int or not 1 <= max_results <= 50:
         raise ValueError("start must be nonnegative and max_results must be between 1 and 50")
+    interval = float(os.environ.get("PAPER_ARXIV_SEARCH_INTERVAL", "10"))
+    if not math.isfinite(interval) or interval < 3:
+        raise ValueError("PAPER_ARXIV_SEARCH_INTERVAL must be finite and at least 3 seconds")
     request = client or httpx
     def fetch():
         response = request.get("https://export.arxiv.org/api/query", params={"search_query": "all:" + query,
                                "start": start, "max_results": max_results}, timeout=20, follow_redirects=False)
         response.raise_for_status()
         return response
-    response = _retry_arxiv(lambda: _arxiv_operation(fetch))
+    response = _retry_arxiv(lambda: _arxiv_operation(fetch, search_interval=interval))
     return parse_arxiv_feed(response.content)
 
 

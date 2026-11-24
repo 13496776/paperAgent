@@ -16,5 +16,6 @@
   "retrieval_candidates": 30,
   "retrieval_timeout_seconds": 180,
   "llm_timeout_seconds": 60,
+  "arxiv_search_interval_seconds": 10,
   "chroma_path": "paperagent-chroma"
 }

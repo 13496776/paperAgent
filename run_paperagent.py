@@ -161,6 +161,9 @@ def main():
     retrieval_timeout = float(os.environ.get("PAPER_RETRIEVAL_TIMEOUT", "180"))
     if not math.isfinite(retrieval_timeout) or retrieval_timeout <= 0:
         raise ValueError("retrieval_timeout_seconds must be positive and finite")
+    arxiv_interval = float(os.environ.get("PAPER_ARXIV_SEARCH_INTERVAL", "10"))
+    if not math.isfinite(arxiv_interval) or arxiv_interval < 3:
+        raise ValueError("arxiv_search_interval_seconds must be finite and at least 3")
     check_port(8000)
     check_port(5173)
     redis_name = None

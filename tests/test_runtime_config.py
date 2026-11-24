@@ -12,12 +12,13 @@ def test_config_applies_to_chunks_and_respects_environment(tmp_path, monkeypatch
     monkeypatch.setattr(os, "environ", os.environ.copy())
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"chunk_size": 100, "chunk_overlap": 10, "embedding_model": "local-model",
-                                  "deepseek_api_key": "private"}), encoding="utf-8")
-    for name in ("PAPER_CHUNK_SIZE", "PAPER_CHUNK_OVERLAP", "PAPER_EMBED_MODEL", "DEEPSEEK_API_KEY"):
+                                  "deepseek_api_key": "private", "arxiv_search_interval_seconds": 20}), encoding="utf-8")
+    for name in ("PAPER_CHUNK_SIZE", "PAPER_CHUNK_OVERLAP", "PAPER_EMBED_MODEL", "DEEPSEEK_API_KEY", "PAPER_ARXIV_SEARCH_INTERVAL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("PAPER_CHUNK_SIZE", "80")
     apply_runtime_config(config)
     assert os.environ["PAPER_EMBED_MODEL"] == "local-model"
+    assert os.environ["PAPER_ARXIV_SEARCH_INTERVAL"] == "20"
     chunks = chunks_for_paper({"title": "Test", "text": "a" * 120})
     assert [len(chunk["text"]) for chunk in chunks] == [80, 50]
     assert os.environ["DEEPSEEK_API_KEY"] == "private"

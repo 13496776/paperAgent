@@ -76,7 +76,7 @@ def test_arxiv_feed_metadata():
 def unpaced_arxiv(monkeypatch):
     from corecoder.papers import ingestion
 
-    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation: operation())
+    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation, **kwargs: operation())
 
 
 def test_arxiv_requests_are_serialized_and_spaced_after_completion(tmp_path, monkeypatch):
@@ -148,7 +148,7 @@ def test_arxiv_custom_client_and_retries_use_rate_limiter(monkeypatch):
 
     calls = []
     attempts = []
-    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation: (calls.append(1), operation())[1])
+    monkeypatch.setattr(ingestion, "_arxiv_operation", lambda operation, **kwargs: (calls.append(kwargs), operation())[1])
     monkeypatch.setattr(ingestion.time, "sleep", lambda _: None)
 
     def response(request):
@@ -160,6 +160,7 @@ def test_arxiv_custom_client_and_retries_use_rate_limiter(monkeypatch):
     with httpx.Client(transport=httpx.MockTransport(response)) as client:
         assert ingestion.search_arxiv("test", client) == []
     assert len(calls) == len(attempts) == 2
+    assert all(call["search_interval"] == 10 for call in calls)
 
 
 def test_arxiv_retry_spacing_with_custom_http_client(tmp_path, monkeypatch):
@@ -183,7 +184,68 @@ def test_arxiv_retry_spacing_with_custom_http_client(tmp_path, monkeypatch):
 
     with httpx.Client(transport=httpx.MockTransport(response)) as client:
         assert ingestion.search_arxiv("test", client) == []
-    assert starts == [100.0, 104.0]
+    assert starts == [100.0, 111.0]
+
+
+def test_search_interval_is_independent_from_other_arxiv_requests(tmp_path, monkeypatch):
+    import httpx
+
+    from corecoder.papers import ingestion
+
+    clock = [100.0]
+    starts = []
+    monkeypatch.setenv("PAPER_ARXIV_SEARCH_INTERVAL", "20")
+    monkeypatch.setattr(ingestion.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(ingestion.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ingestion.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+
+    def response(request):
+        starts.append(clock[0])
+        clock[0] += 1
+        return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom"/>')
+
+    with httpx.Client(transport=httpx.MockTransport(response)) as client:
+        ingestion.search_arxiv("first", client)
+        ingestion._arxiv_operation(lambda: starts.append(clock[0]))
+        ingestion.search_arxiv("second", client)
+        assert starts == [100.0, 104.0, 121.0]
+        for value in ("2", "nan", "inf"):
+            monkeypatch.setenv("PAPER_ARXIV_SEARCH_INTERVAL", value)
+            with pytest.raises(ValueError, match="at least 3"):
+                ingestion.search_arxiv("invalid", client)
+
+
+def test_search_wait_does_not_block_other_arxiv_requests(tmp_path, monkeypatch):
+    import threading
+
+    from corecoder.papers import ingestion
+
+    clock = [100.0]
+    waiting = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def sleep(seconds):
+        if seconds > 3:
+            waiting.set()
+            assert release.wait(3)
+        clock[0] += seconds
+
+    monkeypatch.setattr(ingestion.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(ingestion.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ingestion.time, "sleep", sleep)
+    ingestion._arxiv_operation(lambda: calls.append("first search"), search_interval=10)
+    thread = threading.Thread(target=lambda: ingestion._arxiv_operation(lambda: calls.append("second search"), search_interval=10))
+    thread.start()
+    try:
+        assert waiting.wait(2)
+        ingestion._arxiv_operation(lambda: calls.append("metadata"))
+        assert calls == ["first search", "metadata"]
+    finally:
+        release.set()
+        thread.join(3)
+    assert not thread.is_alive()
+    assert calls == ["first search", "metadata", "second search"]
 
 
 def test_arxiv_pagination_and_legacy_identifiers(unpaced_arxiv):
