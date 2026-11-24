@@ -1,0 +1,281 @@
+{
+  "dataset_id": "paperagent-online-image-pilot-v1",
+  "language": "zh-CN",
+  "time_window": {
+    "start_inclusive": "2023-11-24",
+    "end_inclusive": "2026-11-24",
+    "definition": "以正式会议发表时间为准；预印本日期不能替代正式发表时间",
+    "reason": "固定三年窗口，便于重复测评"
+  },
+  "scope": {
+    "source": "在线检索 arXiv 候选",
+    "ccf_policy": "以测评时选定且记录版本的 CCF 目录及官方论文集为准；未经可靠核验标为待核验",
+    "gold_labels": "无固定金标；用户人工核验评估",
+    "local_import": "本集不要求导入数据库"
+  },
+  "cases": [
+    {
+      "id": "ONLINE-IMG-001",
+      "category": "图像编辑：文本指令",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索 2023 年 11 月 24 日至 2026 年 11 月 24 日间正式发表于 CCF-A 会议、关于文本指令驱动图像编辑的论文，优先 CVPR 或 ICCV。请给出最多 3 篇，包含论文标题、作者、会议及年份、arXiv 链接与可核验的正式发表来源。无法核验会议或 CCF 等级的条目请单列为待核验，不要编造。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "结果与文本指令驱动图像编辑直接相关",
+        "正式发表日期位于指定范围",
+        "每个已确认条目具有会议/论文集证据与有效 arXiv 链接",
+        "会议 CCF-A 等级可独立核验"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-002",
+      "category": "图像编辑：局部与区域控制",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中关于局部或区域可控图像编辑的论文，重点关注掩码或区域约束，最多 3 篇。只列出有来源支持的正式会议信息，其他作为待核验候选。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "方法与局部或区域编辑相关",
+        "标明使用何种区域约束，无法确认则标注未知",
+        "会议等级和发表年月有证据或明确待核验",
+        "不伪称已查阅全文"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-003",
+      "category": "图像修复：不规则缺失",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中处理不规则掩码或大面积缺失的图像修复（image inpainting）论文，最多 3 篇，提供标题、作者、发表会议信息和链接。将会议无法核验的候选单列。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "图像修复指图像缺失区域补全而非代码修复或图像去噪",
+        "结果与不规则掩码或大面积缺失相关",
+        "会议和时间有证据或待核验"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-004",
+      "category": "图像修复：受控补全",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中利用文本提示或参考图像控制图像补全的论文，最多 3 篇。说明控制条件；如只能确认预印本则不要声称已发表。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "论文研究图像补全且具有文本或参考图像控制",
+        "每条说明控制条件及证据",
+        "区分预印本和正式发表"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-005",
+      "category": "图像生成：高分辨率",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中关于高分辨率文本生成图像或高分辨率图像生成的论文，最多 3 篇。报告方法大意及来源；没有可靠来源时请明确说明。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "论文与高分辨率图像生成直接相关",
+        "不能把超分辨率自动等同于文本生成图像",
+        "论文方法说明可从实际访问内容核对",
+        "会议和发表日期核验情况明确"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-006",
+      "category": "图像超分：真实图像",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中针对真实世界图像超分辨率（real-world image super-resolution）的研究，最多 3 篇。每篇说明适用退化场景、会议年份与可核验出处，信息不足时标为未知。"
+      ],
+      "scored_turn": 1,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "结果与真实世界超分辨率相关",
+        "准确区分退化假设与实际测试场景",
+        "不得虚构评测数据或会议录用情况"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-007",
+      "category": "多轮对话与二次检索",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线检索近三年 CCF-A 会议中的图像超分辨率论文，列出最多两篇可核验的结果及来源。",
+        "请进一步检索其中使用扩散模型的论文，并与上一轮结果去重；如果无法确认方法或发表会议，请标为待核验。"
+      ],
+      "scored_turn": 2,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "第二轮使用扩散模型作为新约束",
+        "和第一轮论文去重并保留候选出处",
+        "不能将预印本未经核验地标作 CCF-A",
+        "必须有第二轮在线检索"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "ONLINE-IMG-008",
+      "category": "跨方向对比与边界",
+      "user_turns": [
+        "以下“近三年”固定为 2023-11-24 至 2026-11-24，以正式会议发表日期为准。不得仅凭 arXiv 发布日期断定会议录用；无法查证的会议、CCF 等级和发表日期请标为待核验。请在线查找近三年 CCF-A 会议中关于图像修复和图像超分的论文，各选择至多一篇并给出可核验来源。",
+        "仅根据实际获得的论文证据，比较二者的输入条件与目标；如只有摘要或题录而无法比较，请明确指出缺失，不要编造实验结论。"
+      ],
+      "scored_turn": 2,
+      "task_type": "在线检索",
+      "expected_tools": {
+        "required_all": [
+          "search_arxiv"
+        ],
+        "forbidden": [
+          "import_arxiv"
+        ],
+        "notes": "应使用在线检索；本测试仅搜索不要求下载或导入论文。第二轮明确要求时需再次检索。"
+      },
+      "manual_checks": [
+        "覆盖两个方向或明确说明缺失方向",
+        "区分缺失像素补全与提升图像分辨率",
+        "论断有可访问证据支撑",
+        "证据不足时不编造结果或虚构 CCF 等级"
+      ],
+      "manual_result": {
+        "completion": null,
+        "tool_selection_correct": null,
+        "tool_calls_succeeded": null,
+        "relevant_candidates": null,
+        "venue_verified": null,
+        "ccf_a_verified": null,
+        "notes": ""
+      }
+    }
+  ]
+}
