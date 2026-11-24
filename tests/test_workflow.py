@@ -224,6 +224,61 @@ def test_pause_during_tool_call_and_resume_without_reexecution(tmp_path):
     assert result["tasks"][0]["messages"][-2]["role"] == "tool"
 
 
+def test_retrieval_timeout_records_failure_and_blocks_overlapping_retry(tmp_path, monkeypatch):
+    import threading
+    import time
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    class SlowRetriever:
+        user = "alice"
+
+        def retrieve_with_progress(self, query, progress):
+            calls.append(query)
+            progress("slow", "慢速检索")
+            entered.set()
+            assert release.wait(5)
+            progress("late", "超时后的进度")
+            return [{"text": "late"}]
+
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
+    monkeypatch.setenv("PAPER_RETRIEVAL_TIMEOUT", "0.05")
+    plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
+    responses = [LLMResponse(content=json.dumps(plan)),
+                 LLMResponse(tool_calls=[ToolCall("c", "retrieve_chunks", {"query": "test"})]),
+                 LLMResponse(content="检索超时，证据不足")]
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    tools = ResearchTools(SlowRetriever())
+    supervisor = Supervisor(Scripted(responses), store, tools)
+    supervisor.start("alice", "session", "question")
+    try:
+        result = supervisor.resume("alice", "session")
+        assert entered.is_set()
+        call = result["tasks"][0]["calls"][0]
+        assert call["status"] == "failed" and "超过" in call["error"]
+        assert any(activity["stage"] == "slow" for activity in result["tasks"][0]["activities"])
+        with pytest.raises(RuntimeError, match="后台运行"):
+            ResearchTools(SlowRetriever()).execute("retrieval", "retrieve_chunks", {"query": "retry"})
+    finally:
+        release.set()
+    deadline = time.monotonic() + 2
+    while threading.active_count() and time.monotonic() < deadline:
+        try:
+            assert tools.execute("retrieval", "retrieve_chunks", {"query": "after"}, progress=lambda *_: None) == [{"text": "late"}]
+            break
+        except RuntimeError as exc:
+            if "后台运行" not in str(exc):
+                raise
+            time.sleep(0.01)
+    else:
+        pytest.fail("background retrieval did not finish")
+    assert calls == ["test", "after"]
+    saved = supervisor.get("alice", "session")["workflow"]
+    assert not any(activity["stage"] == "late" for activity in saved["tasks"][0]["activities"])
+
+
 def test_cancel_while_model_call_is_running(tmp_path):
     import threading
 

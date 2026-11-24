@@ -20,6 +20,7 @@ FIELDS = {
     "rerank_threshold": "PAPER_RERANK_THRESHOLD",
     "retrieval_limit": "PAPER_RETRIEVAL_LIMIT",
     "retrieval_candidates": "PAPER_RETRIEVAL_CANDIDATES",
+    "retrieval_timeout_seconds": "PAPER_RETRIEVAL_TIMEOUT",
     "llm_timeout_seconds": "PAPER_LLM_TIMEOUT",
 }
 

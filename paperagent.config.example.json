@@ -14,6 +14,7 @@
   "rerank_threshold": 0.3,
   "retrieval_limit": 5,
   "retrieval_candidates": 30,
+  "retrieval_timeout_seconds": 180,
   "llm_timeout_seconds": 60,
   "chroma_path": "paperagent-chroma"
 }

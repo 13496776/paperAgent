@@ -158,6 +158,9 @@ def main():
     timeout = float(os.environ.get("PAPER_LLM_TIMEOUT", "60"))
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("llm_timeout_seconds must be positive and finite")
+    retrieval_timeout = float(os.environ.get("PAPER_RETRIEVAL_TIMEOUT", "180"))
+    if not math.isfinite(retrieval_timeout) or retrieval_timeout <= 0:
+        raise ValueError("retrieval_timeout_seconds must be positive and finite")
     check_port(8000)
     check_port(5173)
     redis_name = None

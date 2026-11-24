@@ -1,7 +1,12 @@
 """Checkpointed supervisor-worker research workflow."""
 import json
+import math
+import os
+import queue
+import threading
 import time
 import uuid
+import weakref
 
 from corecoder.papers.evaluation import evaluate
 
@@ -14,6 +19,8 @@ WORKERS = {
 }
 MAX_WORKFLOW_TOOL_CALLS = 50
 MAX_PER_TOOL_CALLS = 10
+_retrieval_locks = weakref.WeakValueDictionary()
+_retrieval_locks_guard = threading.Lock()
 
 
 def error_message(exc):
@@ -100,9 +107,7 @@ class ResearchTools:
             query = args.get("query")
             if not isinstance(query, str) or not query.strip():
                 raise ValueError("query must be a nonempty string")
-            if progress and hasattr(self.retriever, "retrieve_with_progress"):
-                return self.retriever.retrieve_with_progress(query, progress)
-            return self.retriever.retrieve(query)
+            return self._retrieve_with_timeout(query, progress)
         if name == "list_corpus_papers":
             if "year" not in args:
                 return self.retriever.list_papers()
@@ -113,6 +118,57 @@ class ResearchTools:
         if name == "import_arxiv":
             return self.online_import(args["id"])
         return evaluate(args["rows"])
+
+    def _retrieve_with_timeout(self, query, progress):
+        timeout = float(os.environ.get("PAPER_RETRIEVAL_TIMEOUT", "180"))
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("PAPER_RETRIEVAL_TIMEOUT must be positive and finite")
+        key = (os.environ.get("CORECODER_SQLITE_PATH", "corecoder-memory.sqlite3"),
+               getattr(self.retriever, "user", id(self.retriever)))
+        with _retrieval_locks_guard:
+            lock = _retrieval_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                _retrieval_locks[key] = lock
+            if not lock.acquire(blocking=False):
+                raise RuntimeError("此前的检索仍在后台运行，请等待其结束后再试")
+
+        events = queue.Queue()
+
+        def run():
+            try:
+                if progress and hasattr(self.retriever, "retrieve_with_progress"):
+                    result = self.retriever.retrieve_with_progress(query, lambda stage, detail: events.put(("progress", (stage, detail))))
+                else:
+                    result = self.retriever.retrieve(query)
+                outcome = ("result", result)
+            except Exception as exc:  # noqa: BLE001
+                outcome = ("error", exc)
+            finally:
+                lock.release()
+            events.put(outcome)
+
+        thread = threading.Thread(target=run, name="paperagent-retrieval", daemon=True)
+        try:
+            thread.start()
+        except BaseException:
+            lock.release()
+            raise
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；检索可能仍在后台运行，请勿立即重试")
+            try:
+                kind, value = events.get(timeout=remaining)
+            except queue.Empty as exc:
+                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；检索可能仍在后台运行，请勿立即重试") from exc
+            if kind == "progress":
+                progress(*value)
+            elif kind == "error":
+                raise value
+            else:
+                return value
 
 
 class Supervisor:
