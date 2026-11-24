@@ -90,19 +90,35 @@ class UserRetriever:
     def __init__(self, user):
         self.user = user
 
-    def list_papers(self):
-        papers = corpus_store().papers(self.user)
+    def list_papers(self, year=None):
+        store = corpus_store()
+        papers = store.papers(self.user, year=year)
         known = {paper["id"] for paper in papers}
+        unknown_year_count = 0
+        if year is not None:
+            with store._connect() as db:
+                unknown_year_count = db.execute("SELECT COUNT(*) FROM papers WHERE owner=? AND status!='deleting' AND year IS NULL", (self.user,)).fetchone()[0]
         index = os.environ.get("PAPER_CORPUS_PATH")
         if index:
+            if year is not None:
+                with store._connect() as db:
+                    known.update(row[0] for row in db.execute("SELECT id FROM papers WHERE owner=?", (self.user,)))
             chunks = json.loads(Path(index).read_text(encoding="utf-8"))
             for chunk in chunks:
                 ident = chunk.get("paper_id")
                 if ident and ident not in known:
-                    papers.append({"id": ident, "title": chunk.get("title", ""), "authors": chunk.get("authors", ""),
-                                   "source": chunk.get("source", ""), "doi": chunk.get("doi", "")})
                     known.add(ident)
-        return {"count": len(papers), "papers": papers}
+                    if year is not None and chunk.get("year") != year:
+                        if chunk.get("year") is None:
+                            unknown_year_count += 1
+                        continue
+                    papers.append({"id": ident, "title": chunk.get("title", ""), "authors": chunk.get("authors", ""),
+                                   "source": chunk.get("source", ""), "doi": chunk.get("doi", ""),
+                                   "year": chunk.get("year"), "date_source": chunk.get("date_source", "")})
+        result = {"count": len(papers), "papers": papers}
+        if year is not None:
+            result.update(year=year, unknown_year_count=unknown_year_count)
+        return result
 
     def retrieve(self, query):
         return self.retrieve_with_progress(query)

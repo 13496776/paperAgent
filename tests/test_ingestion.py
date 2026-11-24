@@ -259,6 +259,47 @@ def test_inventory_includes_shared_index_once(tmp_path, monkeypatch):
     assert web.UserRetriever("alice").list_papers()["count"] == 1
 
 
+def test_year_inventory_uses_metadata_without_models_or_vectors(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "years.sqlite"))
+    monkeypatch.delenv("PAPER_CORPUS_PATH", raising=False)
+    store = web.corpus_store()
+    for ident, year in [("first", 2026), ("second", 2025), ("unknown", None)]:
+        store.add("alice", {"id": ident, "title": ident, "text": "text", "authors": "", "source": "",
+                            "doi": "", "year": year}, Embedding())
+    store.add("bob", {"id": "private", "title": "private", "text": "text", "authors": "", "source": "",
+                      "doi": "", "year": 2026}, Embedding())
+    monkeypatch.setattr(web, "get_models", lambda: pytest.fail("metadata query loaded models"))
+    monkeypatch.setattr(CorpusStore, "vector_search", lambda *args: pytest.fail("metadata query used vector search"))
+    result = web.UserRetriever("alice").list_papers(year=2026)
+    assert result["count"] == 1
+    assert result["unknown_year_count"] == 1
+    assert [paper["id"] for paper in result["papers"]] == ["first"]
+    with pytest.raises(ValueError):
+        web.UserRetriever("alice").list_papers(year="2026")
+
+    from corecoder.llm import LLMResponse, ToolCall
+    from corecoder.persistent import SessionStore
+    from corecoder.workflow.engine import ResearchTools, Supervisor
+    fakeredis = pytest.importorskip("fakeredis")
+
+    class Model:
+        def __init__(self):
+            self.replies = iter([
+                LLMResponse(content='{"tasks":[{"id":"r","worker":"retrieval","goal":"列出2026年论文","depends_on":[]}]}'),
+                LLMResponse(tool_calls=[ToolCall("call", "list_corpus_papers", {"year": 2026})]),
+                LLMResponse(content="找到一篇"),
+            ])
+
+        def chat(self, **kwargs):
+            return next(self.replies)
+
+    supervisor = Supervisor(Model(), SessionStore(fakeredis.FakeRedis(), tmp_path / "session.sqlite"),
+                            ResearchTools(web.UserRetriever("alice")))
+    supervisor.start("alice", "demo", "查询文献库中2026年发表的论文")
+    result = supervisor.resume("alice", "demo")
+    assert result["tasks"][0]["calls"][0]["result"]["count"] == 1
+
+
 def test_rag_workflow_with_real_retrieval_components_and_mocked_models(tmp_path, monkeypatch):
     from corecoder.llm import LLMResponse, ToolCall
     from corecoder.persistent import SessionStore

@@ -227,14 +227,22 @@ class CorpusStore:
                            (str(exc)[:1000], time.time(), owner, ident, generation))
             raise
 
-    def papers(self, owner):
+    def papers(self, owner, year=None):
+        if year is not None and (type(year) is not int or not 1000 <= year <= 9999):
+            raise ValueError("year must be a four-digit integer")
+        if year is None:
+            with self._connect() as db:
+                pending = [row[0] for row in db.execute("SELECT id FROM papers WHERE owner=? AND status='deleting'", (owner,))]
+            for ident in pending:
+                self.delete(owner, ident)
         with self._connect() as db:
-            pending = [row[0] for row in db.execute("SELECT id FROM papers WHERE owner=? AND status='deleting'", (owner,))]
-        for ident in pending:
-            self.delete(owner, ident)
-        with self._connect() as db:
-            rows = db.execute("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at,month,date_source FROM papers "
-                              "WHERE owner=? AND status!='deleting' ORDER BY created_at DESC", (owner,)).fetchall()
+            query = ("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at,month,date_source FROM papers "
+                     "WHERE owner=? AND status!='deleting'")
+            params = [owner]
+            if year is not None:
+                query += " AND year=?"
+                params.append(year)
+            rows = db.execute(query + " ORDER BY created_at DESC", params).fetchall()
         return [{"id": r[0], "title": r[1], "authors": json.loads(r[2]), "source": r[3], "doi": r[4],
                  "ccf_rank": r[5], "page_count": r[6], "status": r[7], "error": r[8], "chunk_size": r[9],
                  "chunk_overlap": r[10], "index_version": r[11], "embedding_model": r[12], "venue": r[13], "year": r[14],
