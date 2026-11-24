@@ -46,20 +46,97 @@ def test_reject_invalid_dependencies():
         validate_plan({"tasks": [{"id": "a", "worker": "retrieval", "goal": "x", "depends_on": ["b"]}]})
 
 
+def test_reorder_forward_dependencies_and_reject_cycles():
+    tasks = validate_plan({"tasks": [{"id": "b", "worker": "delivery", "goal": "answer", "depends_on": ["a"]},
+                                     {"id": "a", "worker": "retrieval", "goal": "search", "depends_on": []}]})
+    assert [t["id"] for t in tasks] == ["a", "b"]
+    with pytest.raises(ValueError, match="cycle"):
+        validate_plan({"tasks": [{"id": "a", "worker": "retrieval", "goal": "x", "depends_on": ["b"]},
+                                 {"id": "b", "worker": "delivery", "goal": "y", "depends_on": ["a"]}]})
+
+
+def test_plan_repair_and_worker_receives_conversation(tmp_path):
+    plan = {"tasks": [{"id": "one", "worker": "analysis", "goal": "answer", "depends_on": []}]}
+    class Model:
+        def __init__(self):
+            self.count = 0
+            self.worker_context = None
+        def chat(self, messages, **kwargs):
+            self.count += 1
+            if self.count == 1:
+                return LLMResponse(content='{"tasks": []}')
+            if 'research supervisor' in messages[0]['content']:
+                if self.count == 2:
+                    assert "Fix the plan" in messages[-1]["content"]
+                return LLMResponse(content=json.dumps(plan))
+            self.worker_context = json.loads(messages[1]["content"])
+            return LLMResponse(content="answer")
+    model = Model()
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
+    supervisor = Supervisor(model, store)
+    supervisor.start('alice', 'session', '只使用本地语料')
+    supervisor.resume('alice', 'session')
+    supervisor.start('alice', 'session', '这篇论文呢？')
+    supervisor.resume('alice', 'session')
+    assert model.worker_context['recent_history'][0]['content'] == '只使用本地语料'
+
+
+def test_compressed_summary_reaches_worker(tmp_path):
+    plan = {"tasks": [{"id": "one", "worker": "analysis", "goal": "answer", "depends_on": []}]}
+    class Model:
+        def __init__(self):
+            self.contexts = []
+        def chat(self, messages, **kwargs):
+            system = messages[0]['content']
+            if 'research supervisor' in system:
+                return LLMResponse(content=json.dumps(plan))
+            if 'Summarize the research conversation' in system:
+                return LLMResponse(content='只使用本地论文；研究 DGM')
+            self.contexts.append(json.loads(messages[1]['content']))
+            return LLMResponse(content='回答')
+    model = Model()
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / 'memory.sqlite')
+    supervisor = Supervisor(model, store)
+    for i in range(8):
+        supervisor.start('alice', 'session', f'问题 {i}')
+        supervisor.resume('alice', 'session')
+    state = supervisor.get('alice', 'session')
+    assert state['summary_id'] and len(state['messages']) <= 10
+    assert model.contexts[-1]['conversation_summary'] == '只使用本地论文；研究 DGM'
+
+
+def test_evidence_reaches_delivery_through_analysis(tmp_path):
+    plan = {"tasks": [{"id": "r", "worker": "retrieval", "goal": "find", "depends_on": []},
+                      {"id": "a", "worker": "analysis", "goal": "compare", "depends_on": ["r"]},
+                      {"id": "d", "worker": "delivery", "goal": "answer", "depends_on": ["a"]}]}
+    class Model:
+        def chat(self, messages, **kwargs):
+            system = messages[0]['content']
+            if 'research supervisor' in system:
+                return LLMResponse(content=json.dumps(plan))
+            if 'retrieval research worker' in system and messages[-1]['role'] != 'tool':
+                return LLMResponse(tool_calls=[ToolCall('c', 'retrieve_chunks', {'query': 'x'})])
+            if 'delivery research worker' in system:
+                assert json.loads(messages[1]['content'])['previous_evidence'][0]['id'] == 'p1'
+            return LLMResponse(content='answer')
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / 'memory.sqlite')
+    supervisor = Supervisor(Model(), store, ResearchTools(Retriever()))
+    supervisor.start('alice', 'session', '比较')
+    assert supervisor.resume('alice', 'session')['status'] == 'completed'
+
+
 def test_tool_budgets_are_workflow_wide_and_survive_resume(tmp_path):
     plan = {"tasks": [{"id": "one", "worker": "retrieval", "goal": "search", "depends_on": []}]}
     calls = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(11)]
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
     supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=calls),
-                                    LLMResponse(tool_calls=[ToolCall("again", "retrieve_chunks", {"query": "x"})])]),
+                                    LLMResponse(content="partial evidence")]),
                             store, ResearchTools(Retriever()))
     supervisor.start("alice", "session", "question")
-    with pytest.raises(RuntimeError, match="10"):
-        supervisor.resume("alice", "session")
+    result = supervisor.resume("alice", "session")
     workflow = supervisor.get("alice", "session")["workflow"]
-    assert workflow["status"] == "failed" and len(workflow["tasks"][0]["calls"]) == 10
-    with pytest.raises(RuntimeError, match="10"):
-        supervisor.resume("alice", "session")
+    assert result["status"] == "completed" and result["budget_exhausted"]
+    assert "不完整" in result["result"] and len(workflow["tasks"][0]["calls"]) == 10
     assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 10
 
 
@@ -79,10 +156,10 @@ def test_total_tool_budget_and_final_model_decision(tmp_path):
                                 store, Tools())
         supervisor.start("alice", "session", "question")
         if extra:
-            with pytest.raises(RuntimeError, match="50"):
+            with pytest.raises(RuntimeError, match="预算用尽"):
                 supervisor.resume("alice", "session")
         else:
-            assert supervisor.resume("alice", "session")["result"] == "done"
+            assert supervisor.resume("alice", "session")["result"].endswith("done")
         assert len(supervisor.get("alice", "session")["workflow"]["tasks"][0]["calls"]) == 50
 
 
@@ -94,15 +171,14 @@ def test_failed_tool_calls_count_across_tasks_and_show_error(tmp_path):
     plan = {"tasks": [{"id": str(i), "worker": "retrieval", "goal": "search", "depends_on": []} for i in range(2)]}
     first = [ToolCall(str(i), "retrieve_chunks", {"query": "test"}) for i in range(10)]
     responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=first), LLMResponse(content="failed"),
-                 LLMResponse(tool_calls=[ToolCall("11", "retrieve_chunks", {"query": "test"})])]
+                 LLMResponse(content="无法取得证据")]
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
     supervisor = Supervisor(Scripted(responses), store, ResearchTools(FailingRetriever()))
     supervisor.start("alice", "session", "question")
-    with pytest.raises(RuntimeError, match="10"):
-        supervisor.resume("alice", "session")
+    result = supervisor.resume("alice", "session")
     workflow = supervisor.get("alice", "session")["workflow"]
     assert workflow["tasks"][0]["calls"][0]["error"] == "TimeoutError"
-    assert workflow["tasks"][1]["status"] == "failed" and "10" in workflow["error"]
+    assert workflow["tasks"][1]["status"] == "completed" and result["budget_exhausted"]
 
 
 def test_pause_during_tool_call_and_resume_without_reexecution(tmp_path):

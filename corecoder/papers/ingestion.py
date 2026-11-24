@@ -4,6 +4,7 @@ import io
 import math
 import random
 import re
+import threading
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -16,7 +17,21 @@ from pypdf import PdfReader
 from .storage import CorpusStore  # noqa: F401
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
-_ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}(?:v\d+)?\Z")
+_ARXIV_ID = re.compile(r"(?:\d{4}\.\d{4,5}|[a-z][a-z.-]*/\d{7})(?:v\d+)?\Z")
+_arxiv_lock = threading.Lock()
+_arxiv_last_request = 0.0
+
+
+def _arxiv_operation(operation, paced):
+    if not paced:
+        return operation()
+    global _arxiv_last_request
+    with _arxiv_lock:
+        delay = 3.0 - (time.monotonic() - _arxiv_last_request)
+        if delay > 0:
+            time.sleep(delay)
+        _arxiv_last_request = time.monotonic()
+        return operation()
 
 
 def _retry_arxiv(operation):
@@ -78,16 +93,18 @@ def extract_pdf(data, filename, *, title="", authors="", source="", doi="", ccf_
 
 
 
-def search_arxiv(query, client=None):
+def search_arxiv(query, client=None, *, start=0, max_results=10):
     if not isinstance(query, str) or not query.strip() or len(query) > 500:
         raise ValueError("query must contain 1–500 characters")
+    if type(start) is not int or start < 0 or type(max_results) is not int or not 1 <= max_results <= 50:
+        raise ValueError("start must be nonnegative and max_results must be between 1 and 50")
     request = client or httpx
     def fetch():
         response = request.get("https://export.arxiv.org/api/query", params={"search_query": "all:" + query,
-                               "start": 0, "max_results": 10}, timeout=20, follow_redirects=False)
+                               "start": start, "max_results": max_results}, timeout=20, follow_redirects=False)
         response.raise_for_status()
         return response
-    response = _retry_arxiv(fetch)
+    response = _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
     return parse_arxiv_feed(response.content)
 
 
@@ -96,7 +113,7 @@ def parse_arxiv_feed(content):
     ns = {"a": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
     results = []
     for entry in root.findall("a:entry", ns):
-        ident = entry.findtext("a:id", "", ns).rstrip("/").split("/")[-1]
+        ident = entry.findtext("a:id", "", ns).rstrip("/").split("/abs/")[-1]
         if not _ARXIV_ID.fullmatch(ident):
             continue
         published = entry.findtext("a:published", "", ns)
@@ -124,7 +141,7 @@ def download_arxiv(ident, client=None):
                 if len(data) > MAX_PDF_BYTES:
                     raise ValueError("PDF exceeds 20 MiB")
         return bytes(data)
-    return _retry_arxiv(fetch)
+    return _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
 
 
 def get_arxiv_paper(ident, client=None):
@@ -135,9 +152,9 @@ def get_arxiv_paper(ident, client=None):
         response = request.get("https://export.arxiv.org/api/query", params={"id_list": ident}, timeout=20, follow_redirects=False)
         response.raise_for_status()
         return response
-    response = _retry_arxiv(fetch)
+    response = _retry_arxiv(lambda: _arxiv_operation(fetch, client is None))
     papers = parse_arxiv_feed(response.content)
-    if not papers or papers[0]["id"].split("v")[0] != ident.split("v")[0]:
+    if not papers or re.sub(r"v\d+$", "", papers[0]["id"]) != re.sub(r"v\d+$", "", ident):
         raise ValueError("arXiv paper not found")
     paper = papers[0]
     data = download_arxiv(paper["id"], client=client)

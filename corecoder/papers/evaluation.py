@@ -4,6 +4,13 @@
 def evaluate(rows):
     if not rows:
         raise ValueError("evaluation dataset is empty")
+    fields = ("intent", "expected_intent", "query", "expected_query", "relevant_ids", "retrieved_ids")
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"evaluation row {index} must be an object")
+        missing = [field for field in fields if field not in row]
+        if missing:
+            raise ValueError(f"evaluation row {index} missing fields: {', '.join(missing)}")
     intent = sum(row["intent"] == row["expected_intent"] for row in rows) / len(rows)
     rewrite = sum(row["query"].strip().casefold() == row["expected_query"].strip().casefold() for row in rows) / len(rows)
     recalls = []

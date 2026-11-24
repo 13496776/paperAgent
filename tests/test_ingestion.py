@@ -72,6 +72,22 @@ def test_arxiv_feed_metadata():
     assert (result["year"], result["month"], result["date_source"]) == (2024, 2, "arxiv_published")
 
 
+def test_arxiv_pagination_and_legacy_identifiers():
+    import httpx
+    from corecoder.papers.ingestion import search_arxiv
+    feed = b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/solv-int/9901001v2</id>
+    <title>Old paper</title><author><name>A</name></author></entry></feed>'''
+    def response(request):
+        assert request.url.params['start'] == '20'
+        assert request.url.params['max_results'] == '5'
+        return httpx.Response(200, content=feed)
+    with httpx.Client(transport=httpx.MockTransport(response)) as client:
+        result = search_arxiv('agents', client, start=20, max_results=5)
+        assert result[0]['id'] == 'solv-int/9901001v2'
+        with pytest.raises(ValueError):
+            search_arxiv('agents', client, max_results=51)
+
+
 def test_authenticated_upload_and_list(tmp_path, monkeypatch):
     key = "test-key-that-is-long-enough-for-hs256"
     monkeypatch.setenv("CORECODER_JWT_KEY", key)
