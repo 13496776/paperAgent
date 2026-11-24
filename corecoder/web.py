@@ -162,6 +162,8 @@ class UserRetriever:
 def get_tools(user):
     from .papers.ingestion import search_arxiv
 
+    if os.environ.get("PAPER_EVALUATION_LOCAL_ONLY") == "1":
+        return ResearchTools(UserRetriever(user))
     return ResearchTools(UserRetriever(user), online_search=search_arxiv,
                          online_import=lambda ident: import_arxiv(user, ident))
 
@@ -230,7 +232,9 @@ def local_session(request: LocalBootstrapRequest, response: Response):
 
 @app.get("/api/settings")
 def public_settings():
-    return {"default_provider": default_provider()}
+    return {"default_provider": default_provider(),
+            "evaluation_local_only": os.environ.get("PAPER_EVALUATION_LOCAL_ONLY") == "1",
+            "shared_corpus_enabled": bool(os.environ.get("PAPER_CORPUS_PATH"))}
 
 
 @app.get("/api/health")
