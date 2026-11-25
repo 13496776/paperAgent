@@ -1,191 +1,541 @@
 {
-  "D1": {
-    "chunk_id": "1a3b6bd582fdd3cc7867",
-    "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
-    "ordinal": 1,
+  "2b851b75d54d16c39195": {
+    "chunk_id": "2b851b75d54d16c39195",
+    "paper_id": "178d09957e42d9436f458197ad9228d302db1860f278f77b9630fe137935118b",
+    "ordinal": 0,
     "page_start": null,
     "page_end": null,
-    "title": "Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents",
-    "excerpt": "while getting better at solving relevant problems. Meta-learning can automate the discovery of novel algorithms, but is limited by first-order improvements and the human design of a suitable search space. The Gödel machine (Schmidhuber, 2007) proposed a theoretical alternative: a self-improving AI t"
+    "title": "AA-CLIP: Enhancing Zero-Shot Anomaly Detection via Anomaly-Aware CLIP",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Anomaly detection (AD) identifies outliers for applications like defect and lesion detection. While CLIP shows promise for zero-shot AD tasks due to its strong generalization capabilities, its inherent Anomaly-Unawareness leads to limited discrimination between normal and abnormal features. To address this problem, we propose Anomaly-Aware CLIP (AA-CLIP), which enhances CLIP's anomaly discrimination ability in both text and visual spaces while preserving its generalization capability. AA-CLIP is"
   },
-  "D2": {
-    "chunk_id": "0880dbcf85a56c33ac0d",
-    "paper_id": "13ff4abe0c7ad4a7dd3b4876d19a8bf940e39e70dabbf06065aa774a6c3457de",
-    "ordinal": 2,
+  "d2e5519aa4b6fa0b5c82": {
+    "chunk_id": "d2e5519aa4b6fa0b5c82",
+    "paper_id": "e8392fcd8bd4828acf6ccb9986321de61005f45f3e63c8d8dc8f36a1683c30a1",
+    "ordinal": 0,
     "page_start": null,
     "page_end": null,
-    "title": "Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents",
-    "excerpt": "to create new, interesting versions of themselves. This open-ended exploration forms a growing tree of diverse, high-quality agents and allows the parallel exploration of many different paths through the search space. Empirically, the DGM automatically improves its coding capabilities (e.g., better "
+    "title": "ADA-GAD: Anomaly-Denoised Autoencoders for Graph Anomaly Detection",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Graph anomaly detection is crucial for identifying nodes that deviate from regular behavior within graphs, benefiting various domains such as fraud detection and social network. Although existing reconstruction-based methods have achieved considerable success, they may face the Anomaly Overfitting and Homophily Trap problems caused by the abnormal patterns in the graph, breaking the assumption that normal nodes are often better reconstructed than abnormal ones. Our observations indicate that mod"
   },
-  "M1": {
-    "chunk_id": "c4b5b35da741986218c6",
-    "paper_id": "c8f494b920eb09bc1fc15cec0a88361f09b4cdc9d859fa1d4d38d625c52150fa",
-    "ordinal": 1,
+  "9658f0c153aef5ae8ba3": {
+    "chunk_id": "9658f0c153aef5ae8ba3",
+    "paper_id": "69f4b9f43c4f2abddcd76e47af1f0eaa18b722e25ccba751838cd600b7f13d3b",
+    "ordinal": 0,
     "page_start": null,
     "page_end": null,
-    "title": "Mendel Gödel Machine: Recursive Self-Improving Coding Agents via Comparative Evolution",
-    "excerpt": "eritance, we introduce Mendel Gödel Machine (MGM). In addition to the general single- trajectoryclonal mutation, MGM includes two new types of self-modification that better utilizes evidences accumulated: thereaction-norm mutationedits an agent based on its trajectories on multiple tasks simultaneou"
+    "title": "CoGeoAD: Hierarchical Color-Geometric Fusion with Multi-View Attention for Zero-Shot 3D Anomaly Detection",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Zero-shot 3D anomaly detection is essential for industrial quality inspection, where labeled anomaly samples are scarce. Meanwhile, existing methods lack an effective mechanism to fuse complementary 2D color images with 3D geometric structures, limiting their ability to detect both surface and structural defects in a unified framework. To address these issues, we propose CoGeoAD, a unified CLIP-based framework that fuses color and geometric features by constructing pixel-aligned paired multi-vie"
   },
-  "S1": {
-    "chunk_id": "268eb2e35cce3eaeaa61",
+  "d14a9681f832abe186ed": {
+    "chunk_id": "d14a9681f832abe186ed",
+    "paper_id": "600b72806a2e1e8bf2ea7429432c17b15cfbd15d76353b7f3ae36db462b12477",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Ex-VAD: Explainable Fine-grained Video Anomaly Detection Based on Visual-Language Models",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "With advancements in visual language models (VLMs) and large language models (LLMs), video anomaly detection (VAD) has progressed beyond binary classification to fine-grained categorization and multidimensional analysis. However, existing methods focus mainly on coarse-grained detection, lacking anomaly explanations. To address these challenges, we propose Ex-VAD, an Explainable Fine-grained Video Anomaly Detection approach that combines fine-grained classification with detailed explanations of "
+  },
+  "3d6db9b620b0cc8566c1": {
+    "chunk_id": "3d6db9b620b0cc8566c1",
+    "paper_id": "3df7712d32bc10697e8ed36b7ec3a58a21891dae1d38034d6fceb77d98dd8998",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "ICAD-LLM: One-for-All Anomaly Detection via In-Context Learning with Large Language Models",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Anomaly detection (AD) is a fundamental task of critical importance across numerous domains. Current systems increasingly operate in rapidly evolving environments that generate diverse yet interconnected data modalities—such as time series, system logs, and tabular records—as exemplified by modern IT systems. Effective AD methods in such environments must therefore possess two critical capabilities: (1) the ability to handle heterogeneous data formats within a unified framework, allowing the mod"
+  },
+  "5ab54a632a39c62fa369": {
+    "chunk_id": "5ab54a632a39c62fa369",
+    "paper_id": "6e004d2cef4efc195a3a2d1d858dc4f503c05469334ff4338d78d7e13098c5e6",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "InCLAD: A Continual Learning Benchmark for Industrial Visual Anomaly Detection",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Industrial anomaly detection benchmarks have advanced rapidly, yet they remain largely static and therefore underrepresent deployment settings in which inspection systems must be extended from one industrial component to another over time. In our setting, continual industrial anomaly detection is framed as a task-incremental problem: each component defines a task, while the learning objective remains semi-supervised. The goal extends beyond conventional anomaly detection, since models should pre"
+  },
+  "0865d03b0ea70c309a7a": {
+    "chunk_id": "0865d03b0ea70c309a7a",
+    "paper_id": "634bcc2d2a0cc8864e64e6865152452c5334c52f7aaed139267f84607b03c433",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "PointAD: Comprehending 3D Anomalies from Points and Pixels for Zero-shot 3D Anomaly Detection",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Zero-shot (ZS) 3D anomaly detection is a crucial yet unexplored field that addresses scenarios where target 3D training samples are unavailable due to practical concerns like privacy protection. This paper introduces PointAD, a novel approach that transfers the strong generalization capabilities of CLIP for recognizing 3D anomalies on unseen objects. PointAD provides a unified framework to comprehend 3D anomalies from both points and pixels. In this framework, PointAD renders 3D anomalies into m"
+  },
+  "16cd5ea2f6e5b037cc48": {
+    "chunk_id": "16cd5ea2f6e5b037cc48",
+    "paper_id": "3d1b74f623f3cd71a0f75d48ee3bb279e652d3e97c30e1d61b84d276da7e6568",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "ReinAD: Towards Real-world Industrial Anomaly Detection with a Comprehensive Contrastive Dataset",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Recent years have witnessed significant advancements in industrial anomaly detection (IAD) thanks to existing anomaly detection datasets. However, the large performance gap between these benchmarks and real industrial practice reveals critical limitations in existing datasets. We argue that the mismatch between current datasets and real industrial scenarios becomes the primary barrier to practical IAD deployment. To this end, we propose ReinAD dataset, a comprehensive contrastive dataset towards"
+  },
+  "9fff24ce2d6232419cdb": {
+    "chunk_id": "9fff24ce2d6232419cdb",
+    "paper_id": "1dc8e96644e8a00a5dfd6699cef6d6af13b6778680081335f9a34144f6b172f6",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Semantic Curriculum for Anomaly Detection: A Unified Language-Driven Meta-Optimization Framework",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "System logs are central to diagnosing failures and monitoring behavior in complex software systems. Yet their unstructured format, semantic variability, and distributional shifts across systems make anomaly detection particularly challenging. Traditional methods—based on templates, static features, or rule-based matching—struggle to generalize, especially in low-label or cross-system scenarios. Large language models (LLMs) offer strong semantic understanding and can infer latent behavioral patte"
+  },
+  "26379c69d96bdaece923": {
+    "chunk_id": "26379c69d96bdaece923",
+    "paper_id": "8d5b059648de509bebcf193345b372893f80cab3afb07feaf80e6335e11331e1",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Multimodal Industrial Anomaly Detection by Crossmodal Feature Mapping",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Recent advancements have shown the potential of leveraging both point clouds and images to localize anomalies. Nevertheless their applicability in industrial manufacturing is often constrained by significant drawbacks such as the use of memory banks which leads to a substantial increase in terms of memory footprint and inference times. We propose a novel light and fast framework that learns to map features from one modality to the other on nominal samples and detect anomalies by pinpointing inco"
+  },
+  "a0e4f408df7d0e85af68": {
+    "chunk_id": "a0e4f408df7d0e85af68",
+    "paper_id": "db2f196dce2b71dc451688743a51a1bfd0d413f8bf323c667bf49180fd52d93f",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Image Editing As Programs with Diffusion Models",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "While diffusion models have achieved remarkable success in text-to-image generation, they encounter significant challenges with instruction-driven image editing. Our research highlights a key challenge: these models particularly struggle with structurally-inconsistent edits that involve substantial layout changes. To address this gap, we introduce Image Editing As Programs (IEAP), a unified image editing framework built upon the Diffusion Transformer (DiT) architecture. Specifically, IEAP deals "
+  },
+  "e8f4aa2683ec31951217": {
+    "chunk_id": "e8f4aa2683ec31951217",
+    "paper_id": "a302e6b322074e0b9dfb8f4901971853ffc0b56170a61743148f7ebbb5bd1689",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Personalized Image Editing in Text-to-Image Diffusion Models via Collaborative Direct Preference Optimization",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Text-to-image (T2I) diffusion models have made remarkable strides in generating and editing high-fidelity images from text. Yet, these models remain fundamentally generic, failing to adapt to the nuanced aesthetic preferences of individual users. In this work, we present the first framework for personalized image editing in diffusion models, introducing Collaborative Direct Preference Optimization (C-DPO), a novel  method that aligns image edits with user-specific preferences while leveraging co"
+  },
+  "43a297a80364531a35cd": {
+    "chunk_id": "43a297a80364531a35cd",
+    "paper_id": "699bb573ce0693a51d19eaec4763c9ce89ad5739f6e3c07ec50a4acfed528cd8",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Enabling Instructional Image Editing with In-Context Generation in Large Scale Diffusion Transformer",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Instruction-based image editing enables precise modifications via natural language prompts, but existing methods face a precision-efficiency tradeoff: fine-tuning demands massive datasets (>10M) and computational resources, while training-free approaches suffer from weak instruction comprehension.\nWe address this by proposing \\textbf{ICEdit}, which leverages the inherent comprehension and generation abilities of large-scale Diffusion Transformers (DiTs) through three key innovations: (1) An in-c"
+  },
+  "7f268fc85c7cc31f7ae6": {
+    "chunk_id": "7f268fc85c7cc31f7ae6",
+    "paper_id": "cb3b038a7821899f485a418eeda1e29c39580bebd0f071f85aae3b8bc31cf4e4",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Prompt Augmentation for Self-supervised Text-guided Image Manipulation",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Text-guided image editing finds applications in various creative and practical fields. While recent studies in image generation have advanced the field they often struggle with the dual challenges of coherent image transformation and context preservation. In response our work introduces prompt augmentation a method amplifying a single input prompt into several target prompts strengthening textual context and enabling localised image editing. Specifically we use the augmented prompts to delineate"
+  },
+  "31886b150664cf5824c2": {
+    "chunk_id": "31886b150664cf5824c2",
+    "paper_id": "94ed9caf47cef73c5e38ff7ec676e72404d55de1d0b543d91abf68ab92e4d320",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "ReFlex: Text-Guided Editing of Real Images in Rectified Flow via Mid-Step Feature Extraction and Attention Adaptation",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Rectified Flow text-to-image models surpass diffusion models in image quality and text alignment, but adapting ReFlow for real-image editing remains challenging. We propose a new real-image editing method for ReFlow by analyzing the intermediate representations of multimodal transformer blocks and identifying three key features. To extract these features from real images with sufficient structural preservation, we leverage mid-step latent, which is inverted only up to the mid-step. We then adapt"
+  },
+  "096d16df8fea329bdf60": {
+    "chunk_id": "096d16df8fea329bdf60",
+    "paper_id": "7d22b3727945415f8b749df69b0323bd1d6c1c9a181e05372119947cb410fda4",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Schedule Your Edit: A Simple yet Effective Diffusion Noise Schedule for Image Editing",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Text-guided diffusion models have significantly advanced image editing, enabling high-quality and diverse modifications driven by text prompts. However, effective editing requires inverting the source image into a latent space, a process often hindered by prediction errors inherent in DDIM inversion.\nThese errors accumulate during the diffusion process, resulting in inferior content preservation and edit fidelity, especially with conditional inputs.\nWe address these challenges by investigating t"
+  },
+  "13a401415405f904ad69": {
+    "chunk_id": "13a401415405f904ad69",
+    "paper_id": "ec53b6b2125bf4adda19b6859c1ee524daf14d696ef5965380a11ba3d4b6f2a8",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Textualize Visual Prompt for Image Editing via Diffusion Bridge",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Visual prompt, a pair of before-and-after edited images, can convey indescribable imagery transformations and prosper in image editing. However, current visual prompt methods rely on a pretrained text-guided image-to-image generative model that requires a triplet of text, before, and after images for retraining over a text-to-image model. Such crafting triplets and retraining processes limit the scalability and generalization of editing. In this paper, we present a framework based on any single "
+  },
+  "728773b4763a30bd78c2": {
+    "chunk_id": "728773b4763a30bd78c2",
+    "paper_id": "1f54d6096aa31c78a726c1897c482e3d1ff1bc95852b349df957a25957a0bcd0",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Towards Understanding Cross and Self-Attention in Stable Diffusion for Text-Guided Image Editing",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "Deep Text-to-Image Synthesis (TIS) models such as Stable Diffusion have recently gained significant popularity for creative text-to-image generation. However for domain-specific scenarios tuning-free Text-guided Image Editing (TIE) is of greater importance for application developers. This approach modifies objects or object properties in images by manipulating feature components in attention layers during the generation process. Nevertheless little is known about the semantic meanings that these"
+  },
+  "70b655a5013de7a1023e": {
+    "chunk_id": "70b655a5013de7a1023e",
+    "paper_id": "b24f1e2947534344b8591b5a66450826199519e62f562ff7c28fcc6c83f4dfca",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "h-Edit: Effective and Flexible Diffusion-Based Editing via Doob's h-Transform",
+    "content_scope": "abstract",
+    "snapshot_status": "indexing",
+    "excerpt": "We introduce a theoretical framework for diffusion-based image editing by formulating it as a reverse-time bridge modeling problem. This approach modifies the backward process of a pretrained diffusion model to construct a bridge that converges to an implicit distribution associated with the editing target at time 0. Building on this framework, we propose h-Edit, a novel editing method that utilizes Doob's h-transform and Langevin Monte Carlo to decompose the update of an intermediate edited sam"
+  },
+  "f96a2e7b47d209d24a77": {
+    "chunk_id": "f96a2e7b47d209d24a77",
+    "paper_id": "9394b246c054085890cdec6e3c4d17e003ca97a4bd5a849dd98f503f08785d26",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "NSARM: Next-Scale Autoregressive Modeling for Robust Real-World Image Super-Resolution",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Most recent real-world image super-resolution (Real-ISR) methods employ pre-trained text-to-image (T2I) diffusion models to synthesize the high-quality image either from random Gaussian noise or directly from the input low-quality image. These approaches train ControlNet or LoRA modules while keeping the pre-trained model fixed, which often introduces over-enhanced artifacts and hallucinations, suffering from limited robustness to inputs with varying degradations. Recent visual autoregressive (A"
+  },
+  "6278e5a8f9a93214186e": {
+    "chunk_id": "6278e5a8f9a93214186e",
+    "paper_id": "17053646c2709b5fd41e5ac7f94698e8da92fe0ff6c76073c753a7be2bb23ae6",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "SR3R: Rethinking Super-Resolution 3D Reconstruction With Feed-Forward Gaussian Splatting",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "3D super-resolution (3DSR) aims to reconstruct high-resolution (HR) 3D scenes from low-resolution (LR) multi-view images. Existing methods rely on dense LR inputs and per-scene optimization, which restricts the high-frequency priors for constructing HR 3D Gaussian Splatting (3DGS) to those inherited from pretrained 2D super-resolution (2DSR) models. This severely limits reconstruction fidelity, cross-scene generalization, and real-time usability. We propose to reformulate 3DSR as a direct feed-f"
+  },
+  "368245a8c9bf3f43c3c5": {
+    "chunk_id": "368245a8c9bf3f43c3c5",
+    "paper_id": "1b77233b22b7bb1191b162793240d46f169dc63c63c3cdb8488dabeaec91653e",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Library Drift: Diagnosing and Fixing a Silent Failure Mode in Self-Evolving LLM Skill Libraries",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Library Drift: Diagnosing and Fixing a Silent Failure Mode\nin Self-Evolving LLM Skill Libraries\nXing Zhang 1 Yanwei Cui 1 Guanghui Wang 1 Ziyuan Li 2 Wei Qiu 2 Bing Zhu 2 Peiyang He 1\nAbstract\nSelf-evolving skill libraries face a silent failure\nmode we term library drift: unbounded skill\naccumulation without outcome-driven lifecycle\nmanagement causes retrieval degradation, false-\npositive injections, and performance stagnation.\nRecent evaluation confirms the symptom (LLM-\nauthored skills deliver"
+  },
+  "81e6f5acb411dd3d87ec": {
+    "chunk_id": "81e6f5acb411dd3d87ec",
+    "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Memento-Skills: Let Agents Design Agents",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Memento-Skills: Let Agents Design Agents\nMemento-Team\nAbstract\nWe introduce Memento-Skills, a generalist, continually-learnable LLM agent system that\nfunctions as an agent-designing agent: it autonomously constructs, adapts, and improves\ntask-specific agents through experience. The system is built on a memory-based reinforcement\nlearningframeworkwithstateful prompts, wherereusableskills(storedasstructuredmarkdown\nfiles) serve as persistent, evolving memory. These skills encode both behaviour and"
+  },
+  "91280d7f80d3d3f80447": {
+    "chunk_id": "91280d7f80d3d3f80447",
+    "paper_id": "b8fdefeb8df6aef02dc7aa250718a60a13aaa6c95825b9ac56b85761cffb5cd6",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "SEVerA: Verified Synthesis of Self-Evolving Agents",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "SEVerA: Verified Self-Evolving Agents with Specification\nGuidance\nDEBANGSHU BANERJEE∗, University of Illinois Urbana-Champaign, USA\nCHANGMING XU∗, University of Illinois Urbana-Champaign, USA\nEUGENE IE, Google, USA\nMING ZHANG, Google, USA\nDAIYI PENG, Google, USA\nCHU-CHENG LIN, Google, USA\nTARUN SURESH, Stanford University, USA\nGAGANDEEP SINGH, University of Illinois Urbana-Champaign, USA\nRecent advances have demonstrated the effectiveness of self-evolving LLM agents on tasks such as program\nrepa"
+  },
+  "c242d5b4eeaef1456fdb": {
+    "chunk_id": "c242d5b4eeaef1456fdb",
     "paper_id": "305520ff80f7dcde1f92ad129938ea40c5b3e52565f943b1a9a5f5d4808eb0ee",
-    "ordinal": 2,
+    "ordinal": 0,
     "page_start": null,
     "page_end": null,
     "title": "Safety in Self-Evolving Agents: A Survey",
-    "excerpt": "cross-context reuse of locally useful experience. Existing surveys organize agent safety around components or lifecycle stages; we complement these views by tracing how a single piece of reusable influence, once written into state, changes its carrier, role, authority, and downstream consequences as"
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Safety in Self-Evolving Agents: A Survey\nJiahao Chen1,Zhou Feng1,Oubo Ma1,Yichen Yan1,Ruixiao Lin1\nHangtao Zhang2,Linkang Du3,Hengyu An1,Yong Yang1,Jun Liu13,Junhao Li1\nNaen Xu1,Chunyi Zhou1,Yuan Su1,Zehao Jin6,Qianli Ma7,Leyi Qi8,Yiming Wang1,\nZhe Ma10,Yuwen Pu11,Mengyao Du4,Yuanyi Song5,Enhao Huang1,Zhihui Fu9,Jun Wang9,\nJinfeng Li12,Yuefeng Chen12,Hui Xue12,Yiming Li8,Tianyu Du1,Shouling Ji1\n1Zhejiang University, 2Huazhong University of Science and Technology, 3Xi’an Jiaotong University,\n4Nat"
   },
-  "Z0": {
-    "chunk_id": "6540549695546be4abdc",
-    "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+  "c89ada320a6da0d0a9af": {
+    "chunk_id": "c89ada320a6da0d0a9af",
+    "paper_id": "d8c1f86d90f370388196cc2989fc7ae7d158089e06d250be4f0f851119941471",
     "ordinal": 0,
     "page_start": null,
     "page_end": null,
-    "title": "Zombie Agents: Persistent Control of Self-Evolving LLM Agents via Self-Reinforcing Injections",
-    "excerpt": "ZOMBIEAGENTS: PERSISTENTCONTROL OFSELF- EVOLVINGLLM AGENTS VIASELF-REINFORCINGIN- JECTIONS Xianglin Yang, Yufei He, Shuo Ji, Bryan Hooi, Jin Song Dong School of Computing National University of Singapore {xianglin,dcsbhk,dcsdjs}@nus.edu.sg,{yufei.he,jishuo}@u.nus.edu ABSTRACT Self-evolving LLM agent"
+    "title": "SePO: Self-Evolving Prompt Agent for System Prompt Optimization",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "SePO: Self-Evolving Prompt Agent\nfor System Prompt Optimization\nWangcheng Tao\nNational University of Singapore\ntaowangcheng@u.nus.edu\nHan Wu∗\nCity University of Hong Kong\nhanwu.cs@my.cityu.edu.hk\nWeng-Fai Wong\nNational University of Singapore\nwongwf@nus.edu.sg\nAbstract\nSystem prompt optimization improves agent behavior without modifying the un-\nderlying model, yielding human-readable, model-agnostic instructions. Existing\nmethods build a prompt agent that refines task agents’ system prompts, yet"
   },
-  "Z1": {
-    "chunk_id": "6135591623d9e60bce59",
-    "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "Zombie Agents: Persistent Control of Self-Evolving LLM Agents via Self-Reinforcing Injections",
-    "excerpt": "controlled web content. The attack has two phases. During infection, the agent reads a poisoned source while completing a benign task and writes the pay- load into long-term memory through its normal update process. During trigger, the payload is retrieved or carried forward and causes unauthorized "
-  },
-  "R0": {
-    "chunk_id": "ffd93e7108470e886a36",
-    "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
-    "ordinal": 0,
-    "page_start": null,
-    "page_end": null,
-    "title": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators",
-    "excerpt": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators Alex Iacob1*, Andrej Jovanovi ´c1,3*, William F . Shen1*, Daniel Burkhardt 2, Meghdad Kurmanji 1, Nurbek Tastan4, Lorenzo Sani 1,3, Niccolò Alberto Elia Venanzi 2, Jiayi Nie 1, Ambroise Odonnat 5, Zeyu Cao1, Bill Marino 1, Xinchi Q"
-  },
-  "R1": {
-    "chunk_id": "178c9cd3439e4e00143a",
-    "paper_id": "55b0c6339fb957435b321dff648d10ca1f49a54d3cda2c140ba46a6feddfbb9d",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "The Red Queen Gödel Machine: Co-Evolving Agents and Their Evaluators",
-    "excerpt": "uators to improve alongside the agents they guide. OnDeepSWE, theRQGMimproves over its fixed-evaluator baseline by adding a com- plementary agent-as-a-judge code-review signal: a co-evolved reviewer grades coder patches to guide search. At low reasoning effort, theRQGMcoder passes82.1%of held-out ta"
-  },
-  "E1": {
-    "chunk_id": "adbf81a0ff768e905655",
-    "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "Evaluation-Free Recursive Self-Improvement for Coding Agents",
-    "excerpt": "ution may encourage benchmark-specific adaptation. We ask a more fundamental question: can coding agents self-improve without downstream task evaluation inside the evolution loop?We introduceExplore-then-Integrate(ELITE), which integrates implementation mechanisms rather than selecting a single expl"
-  },
-  "E2": {
-    "chunk_id": "1393537050b34c3e9328",
-    "paper_id": "cb398a751997ceb9b8c240bc471ffa550a9e63826878bcfb1501be66f8a6f8e7",
-    "ordinal": 2,
-    "page_start": null,
-    "page_end": null,
-    "title": "Evaluation-Free Recursive Self-Improvement for Coding Agents",
-    "excerpt": "and operational validity are used inside the loop. OnSWE-bench Pro, ELITEimproves the initial agent from 60.0% to 85.6%, compared with 86.7% for the Darwin Gödel Machine (DGM) and 88.3% for the Huxley-Gödel Machine (HGM), while using zero candidate task evaluations and reducing observed wall-clock e"
-  },
-  "K0": {
-    "chunk_id": "4480b9e35b92cf971649",
-    "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
-    "ordinal": 0,
-    "page_start": null,
-    "page_end": null,
-    "title": "Memento-Skills: Let Agents Design Agents",
-    "excerpt": "Memento-Skills: Let Agents Design Agents Memento-Team Abstract We introduceMemento-Skills, a generalist, continually-learnable LLM agent system that functions as anagent-designing agent: it autonomously constructs, adapts, and improves task-specific agents through experience. The system is built on "
-  },
-  "K1": {
-    "chunk_id": "e22e07f044bd2aa1b3fb",
-    "paper_id": "982dc015ec1a543c3511519da18fbb2e70ee7ccd78e37169ac1b8e08ffa61071",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "Memento-Skills: Let Agents Design Agents",
-    "excerpt": "expands its skill library based on new experience. This closed-loop design enablescontinual learning without updating LLM parameters, as all adaptation is realised through the evolution of externalised skills and prompts. Unlike prior approaches that rely on human-designed agents, Memento-Skills ena"
-  },
-  "H1": {
-    "chunk_id": "65beb26f9e9c03d27674",
-    "paper_id": "21f837c83ca55a11e21ba33a2da12de27643a94baa4ca2247599b63a7b2b26a3",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "HarnessNet: Feedback-driven Hierarchical Joint Harness Evolution for Multi-agent Systems",
-    "excerpt": "y lack permission to access the environmentfeedbackwhichisfortheentireMAS.Toaddress thesechallenges,weproposeHarnessNet,aframeworkforhi- erarchicalharnessevolutioninMAS.Itsbasicunit,Agentron, consistsofanevolvableforwardharness,afoundationmodel, and a local optimizer that can observe and modify only"
-  },
-  "T1": {
-    "chunk_id": "ceee659831483e01fe6c",
-    "paper_id": "958ca73a34cca57a4f6d4e977e3eff70161fb15cb3fa70476d9a73f978755979",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "Small but Mighty: Test Suites as Improvement Signals for Self-Evolving Agents",
-    "excerpt": "anging rewrites, rejecting only a quarter of them. We instead take test feedback as the executable sig- nal, and search for test suites that are both small and strong with a quality–diversity evolutionary algorithm, so that the signal is dense and informative.TESEARCH treats suite size as a behavior"
-  },
-  "A0": {
-    "chunk_id": "1beb3802f47d9fd7b744",
-    "paper_id": "b5a9913acd1f94b2e6e0658c33875b501d662d8bb720694a3f4181787726ef9b",
-    "ordinal": 0,
-    "page_start": null,
-    "page_end": null,
-    "title": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents",
-    "excerpt": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents Hongwei Yao1†, Yiming Liu2†, Meihui Chen4, Jieling Chen4, Zikun Chen2, Yiling He3\u0000 , Wangze Ni2, Cong Wang1, Kui Ren2∗ Abstract Cowork agents may complete benign tasks while disclos- ing protected data, manipulating unauthorized"
-  },
-  "A1": {
-    "chunk_id": "487d0e9ab03f47abd55e",
-    "paper_id": "b5a9913acd1f94b2e6e0658c33875b501d662d8bb720694a3f4181787726ef9b",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "ActBench: Self-Evolving Benchmark of Behavioral Safety in Cowork Agents",
-    "excerpt": "rs, six execution spaces, and 48 web-service APIs. To move beyond static payloads, we propose a reward-guided beam search method that jointly optimizes attack effectiveness and task utility, while reflec- tion diagnoses failed execution checkpoint and guides pay- load revision. Besides, we propose a"
-  },
-  "C0": {
-    "chunk_id": "1a2371a6734ab540a437",
-    "paper_id": "e5ae5d2219c16f6a128430e9661a83068a498feb6b1b482af38e23e54f2b1456",
-    "ordinal": 0,
-    "page_start": 1,
-    "page_end": 1,
-    "title": "Automatic Controllable Colorization via Imagination",
-    "excerpt": "Automatic Controllable Colorization via Imagination Xiaoyan Cong3 Yue Wu4 Qifeng Chen2 Chenyang Lei1* 1CAIR, HKISI-CAS 2HKUST 3Zhejiang University 4Huawei Noah’s Ark Lab Abstract We propose a framework for automatic colorization that allows for iterative editing and modifications. The core of our fr"
-  },
-  "G1": {
-    "chunk_id": "8e5d8e5bbae120d9e3a7",
-    "paper_id": "26a3f2f56c2e5a8f50770b049206ee08303c8958c5b7261c823143cd13960e7d",
-    "ordinal": 1,
-    "page_start": null,
-    "page_end": null,
-    "title": "GEAR: A General Evaluation Framework for Abductive Reasoning",
-    "excerpt": "gm that overcomes limitations of prior approaches. GEAR eval- uates a set of hypotheses using three metrics:consistency(each hypothesis cor- rectly explains the given observations),generalizability(consistent hypotheses make meaningful predictions on unseen inputs), anddiversity(the set of hy- pothe"
-  },
-  "U0": {
-    "chunk_id": "ca86b44c468fb4b0b397",
-    "paper_id": "4c12a75ca55d2aba7838e104f8555cdeea046a22cf5e8412a94cbf908d670729",
-    "ordinal": 0,
-    "page_start": null,
-    "page_end": null,
-    "title": "UI-Evol: Automatic Knowledge Evolving for Computer Use Agents",
-    "excerpt": "Ziyun Zhang * 1 Xinyi Liu * 1 Xiaoyi Zhang 2 Jun Wang2 Gang Chen 2 Yan Lu2 Abstract External knowledge has played a crucial role in the recent development of computer use agents. We identify a critical knowledge-execution gap: retrieved knowledge often fails to translate into effective real-world ta"
-  },
-  "W0": {
-    "chunk_id": "ec21eadbdf91100fbb9b",
+  "abbdadb59a79e729e02a": {
+    "chunk_id": "abbdadb59a79e729e02a",
     "paper_id": "285d9cbc4334b75b5162686e89b01014261823c0aa2b60c74769823ceb7ab147",
     "ordinal": 0,
     "page_start": null,
     "page_end": null,
     "title": "Self-Evolving Agentic Workflows via Semantic Decomposition of Complex Tasks",
-    "excerpt": "Self-Evolving Agentic Workflows via Semantic Decomposition of Complex Tasks Zichuan Fu1 Junjia Qi1 Xian Wu2 Wenlin Zhang1 Yimin Deng1 Kaifeng Guo1 Xiangyu Zhao1∗ 1City University of Hong Kong 2Tencent Jarvis Lab zc.fu@my.cityu.edu.hk,xianzhao@cityu.edu.hk Abstract Agentic workflows organize complex "
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Self-Evolving Agentic Workflows\nvia Semantic Decomposition of Complex Tasks\nZichuan Fu1 Junjia Qi1 Xian Wu2 Wenlin Zhang1\nYimin Deng1 Kaifeng Guo1 Xiangyu Zhao1∗\n1City University of Hong Kong 2Tencent Jarvis Lab\nzc.fu@my.cityu.edu.hk, xianzhao@cityu.edu.hk\nAbstract\nAgentic workflows organize complex tasks into reusable procedures. However,\ninvoking an LLM at every step incurs repeated inference costs and delays. We\npropose a framework for self-evolving agentic workflows through semantic task\ndec"
   },
-  "P1": {
-    "chunk_id": "7ff17fef4bc1ad6196e5",
-    "paper_id": "14895aa0c1c2f55760463236e104343075e84663fa8d2dc9b24337b50217c8c2",
-    "ordinal": 1,
+  "97c0757c17c2077ef61b": {
+    "chunk_id": "97c0757c17c2077ef61b",
+    "paper_id": "3c54089c730c5ae53dda20331d10846b206c72db3ab4b33ada7c11a97eaf6893",
+    "ordinal": 0,
     "page_start": null,
     "page_end": null,
-    "title": "A Self-Evolving Agent for Longitudinal Personal Health Management",
-    "excerpt": "al large language models and agents show strong single-encounter question answering and evidence interpretation but struggle to accumulate and govern experience across encounters. We present HealthJev, an open-source agent separating shared safety rules and medical knowledge from a private longitudi"
+    "title": "Self-Evolving Agents as Dynamic Graph Transformation: A Survey and New Perspective",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Self-Evolving Agents as Dynamic Graph\nTransformation: A Survey and New Perspective\nYuanyuan Xu, Wenjie Zhang, Yin Chen, Xuemin Lin Fellow, IEEE, and Ying Zhang\nAbstract—Large language model (LLM)-based agents are in-\ncreasingly becoming self-evolving systems that persist across\ninteractions, maintain memories, use tools, acquire skills, refine\nworkflows, and coordinate with other agents. These capabilities\nmake agent states structural and dynamic: entities, relations,\nattributes, dependencies, a"
+  },
+  "3908d36ed01ae09c0e71": {
+    "chunk_id": "3908d36ed01ae09c0e71",
+    "paper_id": "896642aa98dc5a283147aa4245ef96e92891bbc72f31f727c1d36c761cfd70b8",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Self-Improvements in Modern Agentic Systems: A Survey",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Self-Improvements in Modern Agentic Systems: A Survey\nZhe Ren1, Yimeng Chen2∗, Dandan Guo1,2∗, Guowei Rong1, Tonghui Li1,\nR.B. Xiong3, Qingfeng Lan4, Wenyi Wang2, Li Nanbo2, Yibo Yang2,\nMingchen Zhuge2, Jürgen Schmidhuber 2,5\n1School of Artificial Intelligence, Jilin University\n2King Abdullah University of Science and Technology (KAUST)\n3Independent Researcher 4University of Alberta\n5The Swiss AI Lab IDSIA/USI/SUPSI\nrenzhe25@mails.jlu.edu.cn, yimeng.chen@kaust.edu.sa, guodandan@jlu.edu.cn,\n{rong"
+  },
+  "3f11d438fe7a2a49da22": {
+    "chunk_id": "3f11d438fe7a2a49da22",
+    "paper_id": "958ca73a34cca57a4f6d4e977e3eff70161fb15cb3fa70476d9a73f978755979",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Small but Mighty: Test Suites as Improvement Signals for Self-Evolving Agents",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Small but Mighty: Test Suites as Improvement Signals\nfor Self-Evolving Agents\nYutong Cheng1∗ Wei Cheng2 Wenchao Yu2 Dawei Zhou1 Haifeng Chen2\n1Virginia Tech 2NEC Laboratories America\n{yutongcheng,zhoud}@vt.edu {weicheng,wyu,haifeng}@nec-labs.com\nAbstract\nA self-evolving agent rewrites its own harness and must decide which rewrites to\nkeep, so its improvement signal is the check a rewrite has to pass. Verifying a\nrewrite by agent rollout is expensive and subjective, while executable checks such\na"
+  },
+  "12bb892853f1ca5a3a64": {
+    "chunk_id": "12bb892853f1ca5a3a64",
+    "paper_id": "9a8002db3d04b79d2b9cb7e3bdc6bcf48595808a0514f402c18567656a2b43b7",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Who Grades the Grader? Co-Evolving Evaluation Metrics and Skills for Self-Improving LLM Agents",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "Who Grades the Grader?\nCo-Evolving Evaluation Metrics and Skills for Self-Improving LLM Agents\nXing Zhang1, Guanghui Wang1, Yanwei Cui1, Ziyuan Li2, Wei Qiu2, Bing Zhu2, Peiyang He1∗\n1AWS Generative AI Innovation Center\n2HSBC Holdings Plc., HSBC Technology Center, China\nAbstract\nSelf-evolvingagentsystemscreate,revise,andretiretheirown\nskills,buteverysuchloopassumesareliableevaluationmetric\nalready exists. In many real applications none does. We show\nthe metric itself can be the evolving object: "
+  },
+  "100239aff8ab7dac6f83": {
+    "chunk_id": "100239aff8ab7dac6f83",
+    "paper_id": "7a00d1a2e132c0155dfc383490ec142fc42f007d867bd491462dd2745e0e1468",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Zombie Agents: Persistent Control of Self-Evolving LLM Agents via Self-Reinforcing Injections",
+    "content_scope": "full_text",
+    "snapshot_status": "indexing",
+    "excerpt": "ZOMBIE AGENTS: PERSISTENT CONTROL OF SELF-\nEVOLVING LLM AGENTS VIA SELF-REINFORCING IN-\nJECTIONS\nXianglin Yang, Yufei He, Shuo Ji, Bryan Hooi, Jin Song Dong\nSchool of Computing\nNational University of Singapore\n{xianglin,dcsbhk,dcsdjs}@nus.edu.sg,{yufei.he,jishuo}@u.nus.edu\nABSTRACT\nSelf-evolving LLM agents update their internal state across sessions, often by\nwriting and reusing long-term memory. This design improves performance on\nlong-horizon tasks but creates a security risk: untrusted extern"
+  },
+  "89633ba72469e9cfd200": {
+    "chunk_id": "89633ba72469e9cfd200",
+    "paper_id": "2a17baad7f7d4301b3eb6bd455cca7000f36c67ccfacc9ab7d49f981b49501bd",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Accelerating LLM Inference with Lossless Speculative Decoding Algorithms for Heterogeneous Vocabularies",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Accelerating the inference of large language models (LLMs) is a critical challenge in generative AI. Speculative decoding (SD) methods offer substantial efficiency gains by generating multiple tokens using a single target forward pass. However, existing SD approaches require the drafter and target models to share the same vocabulary, thus limiting the pool of possible drafters, often necessitating the training of a drafter from scratch. We present three new SD methods that remove this shared-voc"
+  },
+  "4982f34ff22af076514d": {
+    "chunk_id": "4982f34ff22af076514d",
+    "paper_id": "24a28a481a21e14de57e8ecfa68e2f8e84fa1b1974c666e1168bcdbc619cd895",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Accelerating Masked Diffusion Large Language Models: A Survey of Efficient Inference Techniques",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Diffusion large language models (dLLMs) offer a theoretical advantage in parallel generation over standard autoregressive models. However, parallel generation alone does not guarantee practical speedups. Realizing this efficiency requires specialized inference mechanisms, such as diffusion-aware caching and reuse. Consequently, as inference efficiency becomes a prerequisite for practical deployment, recent research has actively explored acceleration techniques across algorithms, architectures, a"
+  },
+  "dca7b193d22000b70847": {
+    "chunk_id": "dca7b193d22000b70847",
+    "paper_id": "4fe852c746d47af10338884c80b9d568ac627a3097d7e92f134304e64d807eda",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "DAM: Dynamic Attention Mask for Long-Context Large Language Model Inference Acceleration",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Long-context understanding is crucial for many NLP applications, yet transformers struggle with efficiency due to the quadratic complexity of self-attention. Sparse attention methods alleviate this cost but often impose static, predefined masks, failing to capture heterogeneous attention patterns. This results in suboptimal token interactions, limiting adaptability and retrieval accuracy in long-sequence tasks. This work introduces a dynamic sparse attention mechanism that assigns adaptive masks"
+  },
+  "e4a34a0f71b853f9e673": {
+    "chunk_id": "e4a34a0f71b853f9e673",
+    "paper_id": "24fc9475852bc47f9048bbd6878bd7951da35e5ad6c226a0304f742077ef2d7a",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "DIAA: A Decoding-Efficient Inference Acceleration Approach for On-Device Large Language Models",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Large Language Models (LLMs) have revolutionized intelligent interactions, enabling mobile applications such as personal assistants on edge devices for local execution. Speculative decoding (SD) has emerged as a promising paradigm to accelerate LLM inference without compromising generation quality, employing a draft-then-verify manner. However, due to the constrained computing and memory resources on edge devices, existing SD works heavily rely on an auxiliary draft model that incurs additional "
+  },
+  "e8d076ec6225ef899fc5": {
+    "chunk_id": "e8d076ec6225ef899fc5",
+    "paper_id": "e135f35ccb97380ed55d78e470c4e9dbe85c3fdfa87913208c7a4039ecebd8a7",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "KVLink: Accelerating Large Language Models via Efficient KV Cache Reuse",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "We describe KVLink, an approach for efficient key-value (KV) cache reuse in large language models (LLMs). In many LLM applications, different inputs can share overlapping context, such as the same retrieved document appearing in multiple queries. However, the LLMs still need to encode the entire context for each query, leading to redundant computation. In this paper, we investigate a new strategy to eliminate such inefficiency, where the KV cache of each document is precomputed independently. Du"
+  },
+  "2d375a952ae02bd0e284": {
+    "chunk_id": "2d375a952ae02bd0e284",
+    "paper_id": "ef22a333ec19c16f07cc8807e903f7e90e58cfea08584150352eaf4fccf6459b",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "SparseInfer: Accelerating Large Language Model Inference with Semantics-Inspired Adaptive Sparse Activation",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Large Language Models (LLMs) with billions of parameters have transformed AI applications but require immense computational and memory resources during inference.\nAdaptive sparse activation inference, which activates only a small number of neurons for each token, offers a novel way to accelerate model inference without degrading performance, showing great potential for resource-constrained hardware devices. Yet existing token-level MLP-based methods frequently alter activation maps, reducing eff"
+  },
+  "87fb524bc1c226328cbd": {
+    "chunk_id": "87fb524bc1c226328cbd",
+    "paper_id": "086ed4f1a1982ded49bf336f91e4321b0384865e6073bee78ffa92f7a6824dc0",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Understand and Accelerate Memory Processing Pipeline for Large Language Model Inference",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Modern large language models (LLMs) increasingly depend on efficient long-context processing and generation mechanisms, including sparse attention, retrieval-augmented generation (RAG), and compressed contextual memory, to solve complex tasks. We show that these optimizations can be unified into a four-stage memory processing pipeline: *Prepare Memory*, *Compute Relevancy*, *Retrieval*, and *Apply to Inference*. Through systematic profiling, we identify a 22\\%-97\\% memory processing overhead in "
+  },
+  "2ee19cab8183b029efdf": {
+    "chunk_id": "2ee19cab8183b029efdf",
+    "paper_id": "8da67a0f8eac14d1fa8a6d459a3371f7df5f13e2e816e301b833fa0d226eae7f",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "3D Gaussian Splatting with Self-Constrained Priors for High Fidelity Surface Reconstruction",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Rendering 3D surfaces has been revolutionized within the modeling of radiance fields through either 3DGS or NeRF. Although 3DGS has shown advantages over NeRF in terms of rendering quality or speed, there is still room for improvement in recovering high fidelity surfaces through 3DGS. To resolve this issue, we propose a self-constrained prior to constraining the movement of 3D Gaussians, aiming for more accurate depth rendering. Our self-constrained prior is a TSDF grid fused by the rendered dep"
+  },
+  "0ed012852d3b1e9dab3e": {
+    "chunk_id": "0ed012852d3b1e9dab3e",
+    "paper_id": "d855af1c31573bf7a1f4ac8c149527110b58ea3b5f009098ec58be32a8ea72e4",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "CodecSplat: Ultra-Compact Latent Coding for Feed-Forward 3D Gaussian Splatting",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "While feed-forward 3D Gaussian splatting reconstructs renderable Gaussian primitives from sparse context views without per-scene optimization, existing pipelines do not provide a compact scene representation for storage or transmission. A natural solution is to apply existing 3DGS compression methods to the generated Gaussian primitives. However, this approach operates on the final irregular 3D representation and is decoupled from the internal feature-to-Gaussian generation process, which limits"
+  },
+  "6ecd32266e9c669b59d3": {
+    "chunk_id": "6ecd32266e9c669b59d3",
+    "paper_id": "11ddcc3448e2effce38d6658ce862a7a7436ccba735cb50948e3d20f38cc3182",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "DOF-GS: Adjustable Depth-of-Field 3D Gaussian Splatting for Post-Capture Refocusing, Defocus Rendering and Blur Removal",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "3D Gaussian Splatting (3DGS) techniques have recently enabled high-quality 3D scene reconstruction and real-time novel view synthesis. These approaches, however, are limited by the pinhole camera model and lack effective modeling of defocus effects. Departing from this, we introduce DOF-- a new 3DGS-based framework with a finite-aperture camera model and explicit, differentiable defocus rendering, enabling it to function as a post-capture control tool. By training with multi-view images with mod"
+  },
+  "0b8ed03a3d59da2c97a5": {
+    "chunk_id": "0b8ed03a3d59da2c97a5",
+    "paper_id": "93437afa4206890817d994c980015c15f632fe0e49dd3636283cc1ea67a3e0b8",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "GIFSplat: Generative Prior-Guided Iterative Feed-Forward 3D Gaussian Splatting from Sparse Views",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Feed-forward 3D reconstruction offers substantial runtime advantages over per-scene optimization, which remains slow at inference and often fragile under sparse views. However, existing feed-forward methods still have potential for further performance gains, especially for out-of-domain data, and struggle to retain second-level inference time once a generative prior is introduced. These limitations stem from the one-shot prediction paradigm in existing feed-forward pipeline: models are strictly "
+  },
+  "743cbb9555ea9d38b5d7": {
+    "chunk_id": "743cbb9555ea9d38b5d7",
+    "paper_id": "37908ad3b19c0c9dfa7fe8389a3b07daec2cdb73a01ea0b0b0834aafeff14878",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Learning Efficient Fuse-and-Refine for Feed-Forward 3D Gaussian Splatting",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Recent advances in feed-forward 3D Gaussian Splatting have led to rapid improvements in efficient scene reconstruction from sparse views. However, most existing approaches construct Gaussian primitives directly aligned with the pixels in one or more of the input images. This leads to redundancies in the representation when input views overlap and constrains the position of the primitives to lie along the input rays without full flexibility in 3D space. Moreover, these pixel-aligned approaches do"
+  },
+  "9339049d966007642a63": {
+    "chunk_id": "9339049d966007642a63",
+    "paper_id": "471a5e67225c64f8aad3e5a6a0bd1d8c214e71071d79fdd0bdb8a88900e39e04",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "MGSR: 2D/3D Mutual-boosted Gaussian Splatting for High-fidelity Surface Reconstruction under Various Light Conditions",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Novel view synthesis (NVS) and surface reconstruction (SR) are essential tasks in 3D Gaussian Splatting (3DGS). Despite recent progress, these tasks are often addressed independently, with GS-based rendering methods struggling under diverse light conditions and failing to produce accurate surfaces, while GS-based reconstruction methods frequently compromise rendering quality. This raises a central question: must rendering and reconstruction always involve a trade-off? To address this, we propose"
+  },
+  "62580419943cc3b5da3f": {
+    "chunk_id": "62580419943cc3b5da3f",
+    "paper_id": "9eb261aceeccfc8cb7855cfd61b37c542c51dfd62c3c93c3ecd554af07ee172c",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Off The Grid: Detection of Primitives for Feed-Forward 3D Gaussian Splatting",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Feed-forward 3D Gaussian Splatting (3DGS) models enable real-time scene generation but are hindered by suboptimal pixel-aligned primitive placement, which relies on a dense, rigid grid that limits both quality and efficiency. We introduce a new feed-forward architecture that detects 3D Gaussian primitives at a sub-pixel level, replacing the pixel grid with an adaptive, \"Off-The-Grid\" distribution. Inspired by keypoint detection, our decoder learns to locally distribute primitives across image pa"
+  },
+  "67fd2bba9637f36b0a3f": {
+    "chunk_id": "67fd2bba9637f36b0a3f",
+    "paper_id": "4b409177f0c5dbce6b0a882b6071a56f7c578f1fa77435bc748a4eb80e7761fd",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "OmniSplat: Taming Feed-Forward 3D Gaussian Splatting for Omnidirectional Images with Editable Capabilities",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Feed-forward 3D Gaussian splatting (3DGS) models have gained significant popularity due to their ability to generate scenes immediately without needing per-scene optimization. Although omnidirectional images are becoming more popular since they reduce the computation required for image stitching to composite a holistic scene, existing feed-forward models are only designed for perspective images. The unique optical properties of omnidirectional images make it difficult for feature encoders to cor"
+  },
+  "5e0c37a31532e2ec2d38": {
+    "chunk_id": "5e0c37a31532e2ec2d38",
+    "paper_id": "efcc38f6a2a2b18040951bf49daa43ac562f3d054d21fbc5f2e7f6c9cc737d2d",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "SparseSplat: Towards Applicable Feed-Forward 3D Gaussian Splatting with Pixel-Unaligned Prediction",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "Recent progress in feed-forward 3D Gaussian Splatting (3DGS) has notably improved rendering quality. However, the spatially uniform and highly redundant 3DGS map generated by previous feed-forward 3DGS methods limits their integration into downstream reconstruction tasks. We propose SparseSplat, the first feed-forward 3DGS model that adaptively adjusts Gaussian density according to scene structure and information richness of local regions, yielding highly compact 3DGS maps. To achieve this, we p"
+  },
+  "1ba70d2a77d1ac166c37": {
+    "chunk_id": "1ba70d2a77d1ac166c37",
+    "paper_id": "12c69c5eba344d59b927854ac4d2d0796ea5235b1136679aefae68e96ddc51f8",
+    "ordinal": 0,
+    "page_start": null,
+    "page_end": null,
+    "title": "Plug-and-Play PDE Optimization for 3D Gaussian Splatting: Toward High-Quality Rendering and Reconstruction",
+    "content_scope": "abstract",
+    "snapshot_status": "ready",
+    "excerpt": "3D Gaussian Splatting (3DGS) has revolutionized radiance field reconstruction by achieving high-quality novel view synthesis with fast rendering speed, introducing 3D Gaussian primitives to represent the scene. However, 3DGS encounters blurring and floaters when applied to complex scenes, caused by the reconstruction of redundant and ambiguous geometric structures. We attribute this issue to the unstable optimization of the Gaussians. To address this limitation, we present a plug-and-play PDE-ba"
   }
 }

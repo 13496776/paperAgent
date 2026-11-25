@@ -197,6 +197,7 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'evaluation_results')
     parser.add_argument('--timeout', type=float, default=900)
     parser.add_argument('--no-judge', action='store_true', help='跳过模型裁判，仅输出可从轨迹计算的指标')
+    parser.add_argument('--skip-unready', action='store_true', help='跳过依赖尚未就绪论文的案例，并在报告中记录')
     args = parser.parse_args()
     from corecoder.runtime_config import apply_runtime_config
     apply_runtime_config()
@@ -232,9 +233,25 @@ def main():
             raise RuntimeError('服务必须启用 PAPER_EVALUATION_LOCAL_ONLY=1 且禁用 PAPER_CORPUS_PATH；请按说明重启')
         papers = api(client, 'GET', '/api/corpus')
         actual = {item['id'] for item in papers if item.get('status') == 'ready'}
-        required = {p for case in cases for p in case.get('required_paper_ids', [])}
-        if len(actual) != dataset['corpus']['paper_count'] or not required.issubset(actual):
-            raise RuntimeError('当前用户语料与标注快照不匹配，请确认 local-user 的 32 篇论文和索引状态')
+        all_ids = {item['id'] for item in papers}
+        referenced = {p['id'] for case in cases for p in case.get('target_papers', [])}
+        if referenced - all_ids:
+            raise RuntimeError(f'当前语料缺少 {len(referenced - all_ids)} 篇目标论文，请检查账号和数据库')
+        minimum = dataset['corpus'].get('ready_count_minimum')
+        if minimum is None and len(actual) != dataset['corpus']['paper_count']:
+            raise RuntimeError('当前用户的就绪论文数量与标注快照不匹配')
+        if minimum is not None and len(actual) < minimum:
+            raise RuntimeError(f'当前仅有 {len(actual)} 篇就绪论文，少于测评要求的 {minimum} 篇')
+        unavailable = {case['id']: sorted(set(case.get('required_ready_paper_ids',
+                                                       case.get('required_paper_ids', []))) - actual)
+                       for case in cases}
+        unavailable = {key: value for key, value in unavailable.items() if value}
+        if unavailable and not args.skip_unready:
+            raise RuntimeError(f'{len(unavailable)} 个案例依赖未就绪论文；请完成索引或使用 --skip-unready')
+        report['skipped_unready'] = unavailable
+        cases = [case for case in cases if case['id'] not in unavailable]
+        if not cases:
+            raise RuntimeError('没有可运行的案例')
         for case in cases:
             print(f"运行 {case['id']}：{case['category']}", flush=True)
             try:
