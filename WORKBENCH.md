@@ -69,3 +69,7 @@ Web 会话最后一次访问或写入后在 Redis 保留 24 小时；完成一�
 其他工具方面，arXiv 元数据请求的连接和读取等网络超时默认为 20 秒，可用配置 arxiv_api_timeout_seconds 或环境变量 PAPER_ARXIV_API_TIMEOUT 调整，PDF 下载的网络超时为 60 秒，并可能重试和等待限速；导入还包含无独立总时限的 PDF 解析及索引写入。论文清单使用 SQLite，数据库锁等待为 30 秒，清理待删除条目可能访问向量库。指标计算没有独立时限。模型调用的 `llm_timeout_seconds` 与检索超时分别配置。
 
 工作流执行期间会定期续期 Redis 会话锁，以支持较长的任务；Redis 不可用或锁丢失时，后续保存会失败。
+
+## Paperlist 在线搜索
+
+可在环境变量 PAPERLIST_API_KEY 或本地 paperagent.config.json 的 paperlist_api_key 中配置 Paperlist API Key，重启后前端默认选择 Paperlist，仍可手动切换至 arXiv。密钥应通过环境设置或被忽略的本地配置填写，切勿写入版本库。Paperlist MCP 搜索覆盖其收录的 AI 会议论文，返回结果和分页游标；结果可打开 Paperlist 页面。Paperlist ID 与 arXiv ID 不同，前端的 arXiv 导入功能仍使用 arXiv 搜索结果。研究工作流在允许在线搜索且配置了密钥时可调用 search_paperlist。测评的本地模式不会启用该工具。

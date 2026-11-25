@@ -177,11 +177,13 @@ class UserRetriever:
 
 def get_tools(user):
     from .papers.ingestion import search_arxiv
+    from .papers.paperlist import search_paperlist
 
     if os.environ.get("PAPER_EVALUATION_LOCAL_ONLY") == "1":
         return ResearchTools(UserRetriever(user))
     return ResearchTools(UserRetriever(user), online_search=search_arxiv,
-                         online_import=lambda ident: import_arxiv(user, ident))
+                         online_import=lambda ident: import_arxiv(user, ident),
+                         paperlist_search=search_paperlist if os.environ.get("PAPERLIST_API_KEY") else None)
 
 
 def supervisor(provider, user):
@@ -252,6 +254,7 @@ def local_session(request: LocalBootstrapRequest, response: Response):
 def public_settings():
     return {"default_provider": default_provider(),
             "evaluation_local_only": os.environ.get("PAPER_EVALUATION_LOCAL_ONLY") == "1",
+            "paperlist_enabled": bool(os.environ.get("PAPERLIST_API_KEY")),
             "shared_corpus_enabled": bool(os.environ.get("PAPER_CORPUS_PATH"))}
 
 
@@ -289,6 +292,11 @@ class ArxivSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
 
 
+class PaperlistSearchRequest(ArxivSearchRequest):
+    query: str = Field(min_length=1, max_length=300)
+    cursor: str | None = Field(default=None, min_length=1, max_length=2000)
+
+
 class ArxivImportRequest(BaseModel):
     id: str = Field(min_length=1, max_length=32)
 
@@ -319,6 +327,13 @@ def search_papers(request: ArxivSearchRequest, user: str = Depends(current_user)
     from .papers.ingestion import search_arxiv
 
     return handle(lambda: search_arxiv(request.query))
+
+
+@app.post("/api/corpus/paperlist/search")
+def search_paperlist_papers(request: PaperlistSearchRequest, user: str = Depends(current_user)):
+    from .papers.paperlist import search_paperlist
+
+    return handle(lambda: search_paperlist(request.query, cursor=request.cursor))
 
 
 @app.post("/api/corpus/import")

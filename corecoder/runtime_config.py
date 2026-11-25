@@ -8,6 +8,7 @@ FIELDS = {
     "reranker_model": "PAPER_RERANK_MODEL",
     "deepseek_api_key": "DEEPSEEK_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
+    "paperlist_api_key": "PAPERLIST_API_KEY",
     "deepseek_model": "DEEPSEEK_MODEL",
     "openai_model": "OPENAI_MODEL",
     "deepseek_base_url": "DEEPSEEK_BASE_URL",

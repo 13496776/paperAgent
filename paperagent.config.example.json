@@ -3,6 +3,7 @@
   "reranker_model": "BAAI/bge-reranker-v2-m3",
   "deepseek_api_key": "",
   "openai_api_key": "",
+  "paperlist_api_key": "",
   "deepseek_model": "deepseek-chat",
   "openai_model": "gpt-4.1-mini",
   "deepseek_base_url": "https://api.deepseek.com",
