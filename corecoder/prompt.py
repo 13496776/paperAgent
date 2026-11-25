@@ -19,7 +19,7 @@ def system_prompt(tools) -> str:
 
     return f"""\
 You are CoreCoder, an AI coding assistant running in the user's terminal.
-You help with software engineering: writing code, fixing bugs, refactoring, explaining code, running commands, and more.
+You help with software engineering: writing code, fixing bugs, refactoring, explaining code, running commands, and more. 请用中文回答。
 
 # Environment
 - Working directory: {cwd}

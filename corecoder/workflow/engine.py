@@ -413,6 +413,7 @@ class Supervisor:
                     {"role": "system", "content": "You are a research supervisor. Return JSON only: {\"tasks\":[{\"id\":"
                      "\"...\",\"worker\":\"retrieval|ingestion|analysis|delivery|evaluation\",\"goal\":\"...\","
                      "\"depends_on\":[\"prior task id\"]}]}. Order dependencies first. Use only needed workers. "
+                     "请用中文回答。保留指定的 JSON 字段名和 worker 枚举值。 "
                      "Do not claim unavailable capabilities. Use a small plan: combine related searches into one retrieval task; "
                      "use a delivery task for the answer and preserve evidence for each requested paper. "
                      "Do not add ingestion or evaluation tasks unless the user asks for them. "
@@ -660,6 +661,11 @@ class Supervisor:
                                   "dependencies": results, "previous_evidence": evidence_catalog,
                                   "conversation_summary": self.store.summary(user, session, state.get("summary_id")),
                                   "recent_history": state.get("messages", [])[-9:-1]}, ensure_ascii=False)}]
+                    if messages and messages[0].get("role") == "system" and isinstance(messages[0].get("content"), str):
+                        if "请用中文回答。" not in messages[0]["content"]:
+                            messages[0]["content"] += "\n请用中文回答。"
+                    else:
+                        messages.insert(0, {"role": "system", "content": "请用中文回答。"})
                     task["messages"] = messages
                     self._recover_tool_receipts(task, messages)
                     save()
@@ -742,7 +748,7 @@ class Supervisor:
                         prior = self.store.summary(user, session, state.get("summary_id"))
                         response = self.llm.chat(messages=[
                             {"role": "system", "content": "Summarize the research conversation, retaining evidence, citations, "
-                                                           "uncertainty, user preferences and unfinished work."},
+                                                           "uncertainty, user preferences and unfinished work. 请用中文回答。"},
                             {"role": "user", "content": json.dumps({"previous_summary": prior, "messages": history[:-8]},
                                                                       ensure_ascii=False)},
                         ])

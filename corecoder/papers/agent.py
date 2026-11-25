@@ -19,7 +19,7 @@ class PaperAgent:
         self.state = AgentState()
 
     def _call(self, system, data):
-        response = self.llm.chat(messages=[{"role": "system", "content": system},
+        response = self.llm.chat(messages=[{"role": "system", "content": system + " 请用中文回答。保留约定的 JSON 字段名和标识符。"},
                                            {"role": "user", "content": json.dumps(data, ensure_ascii=False)}])
         return response.content
 

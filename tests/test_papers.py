@@ -22,6 +22,7 @@ class LLM:
             content = ""
         result = Response()
         system = messages[0]["content"]
+        assert "请用中文回答。" in system
         if "string fields" in system:
             result.content = json.dumps({"intent": "search", "resolved_question": "retrieval", "query": "retrieval"})
         elif "Assess" in system:

@@ -359,6 +359,33 @@ def test_recover_tool_receipt_without_replaying():
     assert len(messages) == 3
 
 
+def test_chinese_instruction_is_applied_to_planning_and_resumed_tasks(tmp_path):
+    class Model:
+        def __init__(self):
+            self.calls = 0
+
+        def chat(self, messages, **kwargs):
+            self.calls += 1
+            assert "请用中文回答。" in messages[0]["content"]
+            if self.calls == 1:
+                return LLMResponse(content='{"tasks":[{"id":"a","worker":"analysis","goal":"analyze","depends_on":[]}]}')
+            assert messages[0]["content"].count("请用中文回答。") == 1
+            return LLMResponse(content="结果")
+
+    redis = fakeredis.FakeRedis()
+    store = SessionStore(redis, tmp_path / "memory.sqlite")
+    supervisor = Supervisor(Model(), store)
+    supervisor.start("alice", "session", "question")
+    key = store._key("alice", "session")
+    state = json.loads(redis.get(key))
+    state["workflow"]["tasks"][0]["messages"] = [
+        {"role": "system", "content": "Legacy worker instructions."}, {"role": "user", "content": "question"}]
+    redis.set(key, json.dumps(state), ex=3600)
+    assert supervisor.resume("alice", "session")["result"] == "结果"
+    saved = supervisor.get("alice", "session")["workflow"]["tasks"][0]["messages"]
+    assert saved[0]["content"].count("请用中文回答。") == 1
+
+
 def test_cancel_awaiting_plan_marks_pending_tasks(tmp_path):
     plan = {"tasks": [{"id": "one", "worker": "analysis", "goal": "analyze", "depends_on": []}]}
     store = SessionStore(fakeredis.FakeRedis(), tmp_path / "memory.sqlite")
