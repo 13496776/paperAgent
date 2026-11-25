@@ -71,6 +71,12 @@ class CorpusStore:
                 db.execute("ALTER TABLE papers ADD COLUMN month INTEGER")
             if "date_source" not in columns:
                 db.execute("ALTER TABLE papers ADD COLUMN date_source TEXT NOT NULL DEFAULT ''")
+            if "content_scope" not in columns:
+                db.execute("ALTER TABLE papers ADD COLUMN content_scope TEXT NOT NULL DEFAULT 'full_text'")
+            if "provider" not in columns:
+                db.execute("ALTER TABLE papers ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
+            if "external_id" not in columns:
+                db.execute("ALTER TABLE papers ADD COLUMN external_id TEXT NOT NULL DEFAULT ''")
             db.commit()
             self._migrate_legacy(db)
 
@@ -90,13 +96,17 @@ class CorpusStore:
 
     def _insert(self, db, owner, paper, chunks):
         authors = json.dumps(paper.get("authors", ""), ensure_ascii=False)
-        db.execute("INSERT INTO papers (owner,id,title,authors,source,doi,ccf_rank,page_count,status,model,error,created_at,generation,chunk_size,chunk_overlap,index_version,venue,year,ccf_source,ccf_version,ccf_verified,updated_at,vector_path,month,date_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'indexing', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+        db.execute("INSERT INTO papers (owner,id,title,authors,source,doi,ccf_rank,page_count,status,model,error,created_at,generation,chunk_size,chunk_overlap,index_version,venue,year,ccf_source,ccf_version,ccf_verified,updated_at,vector_path,month,date_source,content_scope,provider,external_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'indexing', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)",
                    (owner, paper["id"], paper["title"], authors, paper.get("source") or "",
                     paper.get("doi") or "", paper.get("ccf_rank"), paper.get("page_count"), time.time(), uuid.uuid4().hex,
                     paper.get("chunk_size"), paper.get("chunk_overlap"), paper.get("index_version", "legacy"),
                     paper.get("venue") or "", paper.get("year"), paper.get("ccf_source") or "",
                     paper.get("ccf_version") or "", int(bool(paper.get("ccf_verified"))), time.time(),
-                    paper.get("month"), paper.get("date_source") or ""))
+                    paper.get("month"), paper.get("date_source") or "", paper.get("content_scope", "full_text"),
+                    paper.get("provider") or "", paper.get("external_id") or ""))
+        self._insert_chunks(db, owner, paper, chunks)
+
+    def _insert_chunks(self, db, owner, paper, chunks):
         used = set()
         for ordinal, item in enumerate(chunks):
             chunk = dict(item)
@@ -105,6 +115,8 @@ class CorpusStore:
                 ident = hashlib.sha256(f"{ident}:{ordinal}".encode()).hexdigest()[:20]
             used.add(ident)
             chunk.update(id=ident, paper_id=paper["id"])
+            if paper.get("content_scope") == "abstract":
+                chunk["content_scope"] = "abstract"
             db.execute("INSERT INTO paper_chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (owner, paper["id"], ident, ordinal, chunk.get("section") or "", chunk.get("page_start"),
                         chunk.get("page_end"), chunk["text"], json.dumps(chunk, ensure_ascii=False)))
@@ -147,7 +159,7 @@ class CorpusStore:
         with self._connect() as db:
             existing = db.execute("SELECT status FROM papers WHERE owner=? AND id=?", (owner, paper["id"])).fetchone()
         created = existing is None
-        if created:
+        if created or (existing and existing[0] == "metadata_only" and paper.get("content_scope") == "abstract"):
             paper = dict(paper)
             paper["chunk_size"] = int(os.environ.get("PAPER_CHUNK_SIZE", "1024"))
             paper["chunk_overlap"] = int(os.environ.get("PAPER_CHUNK_OVERLAP", "50"))
@@ -157,8 +169,19 @@ class CorpusStore:
                 raise ValueError("paper contains no searchable text")
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
-                if not db.execute("SELECT 1 FROM papers WHERE owner=? AND id=?", (owner, paper["id"])).fetchone():
+                current = db.execute("SELECT status FROM papers WHERE owner=? AND id=?", (owner, paper["id"])).fetchone()
+                if not current and created:
                     self._insert(db, owner, paper, chunks)
+                elif current and current[0] == "metadata_only" and paper.get("content_scope") == "abstract":
+                    db.execute("UPDATE papers SET title=?,authors=?,source=?,doi=?,venue=?,year=?,month=?,date_source=?, "
+                               "status='indexing',content_scope='abstract',chunk_size=?,chunk_overlap=?,index_version=?, "
+                               "generation=?,updated_at=? WHERE owner=? AND id=? AND status='metadata_only'",
+                               (paper["title"], json.dumps(paper.get("authors", ""), ensure_ascii=False),
+                                paper.get("source") or "", paper.get("doi") or "", paper.get("venue") or "",
+                                paper.get("year"), paper.get("month"), paper.get("date_source") or "", paper["chunk_size"],
+                                paper["chunk_overlap"], paper["index_version"], uuid.uuid4().hex, time.time(), owner, paper["id"]))
+                    self._insert_chunks(db, owner, paper, chunks)
+                    created = False
                 else:
                     created = False
         self.ensure_indexed(owner, encoder, paper_id=paper["id"])
@@ -166,6 +189,18 @@ class CorpusStore:
         if result is None:
             raise ValueError("paper was deleted while indexing")
         return {**result, "chunks": len(self.chunks(owner, paper["id"])), "created": created}
+
+    def add_metadata(self, owner, paper):
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute("SELECT 1 FROM papers WHERE owner=? AND id=?", (owner, paper["id"])).fetchone()
+            if not existing:
+                self._insert(db, owner, {**paper, "content_scope": "metadata_only"}, [])
+                db.execute("UPDATE papers SET status='metadata_only' WHERE owner=? AND id=?", (owner, paper["id"]))
+        result = next((item for item in self.papers(owner) if item["id"] == paper["id"]), None)
+        if result is None:
+            raise ValueError("paper was deleted while saving")
+        return {**result, "chunks": len(self.chunks(owner, paper["id"])), "created": not bool(existing)}
 
     def ensure_indexed(self, owner, encoder, paper_id=None, progress=None):
         with self._connect() as db:
@@ -178,6 +213,8 @@ class CorpusStore:
         for number, (ident, status, model, vector_path) in enumerate(rows, 1):
             if status == "deleting":
                 self.delete(owner, ident)
+            elif status == "metadata_only":
+                continue
             elif status != "ready" or model != self.model or vector_path != self.chroma_path or not Path(self.chroma_path).exists():
                 if progress:
                     progress("index_build", f"正在构建或恢复论文向量索引（{number}/{len(rows)}）")
@@ -236,7 +273,7 @@ class CorpusStore:
             for ident in pending:
                 self.delete(owner, ident)
         with self._connect() as db:
-            query = ("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at,month,date_source FROM papers "
+            query = ("SELECT id,title,authors,source,doi,ccf_rank,page_count,status,error,chunk_size,chunk_overlap,index_version,model,venue,year,ccf_source,ccf_version,ccf_verified,created_at,updated_at,month,date_source,content_scope,provider,external_id FROM papers "
                      "WHERE owner=? AND status!='deleting'")
             params = [owner]
             if year is not None:
@@ -247,7 +284,8 @@ class CorpusStore:
                  "ccf_rank": r[5], "page_count": r[6], "status": r[7], "error": r[8], "chunk_size": r[9],
                  "chunk_overlap": r[10], "index_version": r[11], "embedding_model": r[12], "venue": r[13], "year": r[14],
                  "ccf_source": r[15], "ccf_version": r[16], "ccf_verified": bool(r[17]),
-                 "created_at": r[18], "updated_at": r[19], "month": r[20], "date_source": r[21]} for r in rows]
+                 "created_at": r[18], "updated_at": r[19], "month": r[20], "date_source": r[21], "content_scope": r[22],
+                 "provider": r[23], "external_id": r[24]} for r in rows]
 
     def chunks(self, owner, paper_id=None, include_pending=False):
         with self._connect() as db:

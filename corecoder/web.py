@@ -1,10 +1,12 @@
 """FastAPI interface for authenticated research workflows."""
+import hashlib
 import hmac
 import json
 import math
 import os
 import threading
 import time
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
@@ -83,6 +85,44 @@ def import_arxiv(user, ident):
     return corpus_store().add(user, get_arxiv_paper(ident), get_models()[0])
 
 
+def import_paperlist(user, ident, *, record=None):
+    from .papers.paperlist import _normalize_paper, get_paperlist
+
+    record = _normalize_paper(record) if record is not None else get_paperlist(ident)
+    if record["id"] != ident:
+        raise ValueError("Paperlist 论文 ID 不匹配")
+    conference = record.get("conference") if isinstance(record.get("conference"), dict) else {}
+    venue = conference.get("name") if isinstance(conference.get("name"), str) else ""
+    year = conference.get("year")
+    if type(year) is not int or not 1000 <= year <= 9999:
+        year = None
+    month = None
+    date_source = "paperlist_conference_year" if year else ""
+    published = record.get("published_at")
+    if isinstance(published, str):
+        try:
+            published_date = date.fromisoformat(published[:10])
+            year, month, date_source = published_date.year, published_date.month, "paperlist_published_at"
+        except ValueError:
+            pass
+    paper = {"id": hashlib.sha256(("paperlist:" + ident).encode("utf-8")).hexdigest(),
+             "provider": "paperlist", "external_id": ident, "title": record["title"], "authors": record["authors"],
+             "source": record["url"], "doi": record["doi"], "venue": venue,
+             "year": year, "month": month, "date_source": date_source, "page_count": None}
+    abstract = record["abstract"].strip()
+    store = corpus_store()
+    metadata = store.add_metadata(user, paper)
+    if not abstract or (metadata["content_scope"] == "abstract" and metadata["status"] == "ready"):
+        return metadata
+    paper.update(text=abstract, content_scope="abstract")
+    try:
+        result = store.add(user, paper, get_models()[0])
+    except Exception as exc:
+        raise RuntimeError(f"Paperlist 题录已保存，但摘要索引失败：{error_message(exc)}") from exc
+    result["created"] = metadata["created"] or result["created"]
+    return result
+
+
 _shared_index_lock = threading.Lock()
 
 
@@ -137,7 +177,7 @@ class UserRetriever:
         papers = store.papers(self.user)
         index = os.environ.get("PAPER_CORPUS_PATH")
         shared = json.loads(Path(index).read_text(encoding="utf-8")) if index else []
-        if not papers and not shared:
+        if not any(paper["status"] != "metadata_only" for paper in papers) and not shared:
             return []
         if progress:
             progress("model_loading", "加载或复用嵌入模型和重排模型")
@@ -183,7 +223,8 @@ def get_tools(user):
         return ResearchTools(UserRetriever(user))
     return ResearchTools(UserRetriever(user), online_search=search_arxiv,
                          online_import=lambda ident: import_arxiv(user, ident),
-                         paperlist_search=search_paperlist)
+                         paperlist_search=search_paperlist,
+                         paperlist_import=lambda ident, record=None: import_paperlist(user, ident, record=record))
 
 
 def supervisor(provider, user):
@@ -301,6 +342,10 @@ class ArxivImportRequest(BaseModel):
     id: str = Field(min_length=1, max_length=32)
 
 
+class PaperlistImportRequest(BaseModel):
+    id: str = Field(min_length=1, max_length=200)
+
+
 @app.get("/api/corpus")
 def list_papers(user: str = Depends(current_user)):
     return handle(lambda: corpus_store().papers(user))
@@ -339,6 +384,11 @@ def search_paperlist_papers(request: PaperlistSearchRequest, user: str = Depends
 @app.post("/api/corpus/import")
 def import_paper(request: ArxivImportRequest, user: str = Depends(current_user)):
     return handle(lambda: import_arxiv(user, request.id))
+
+
+@app.post("/api/corpus/paperlist/import")
+def import_paperlist_paper(request: PaperlistImportRequest, user: str = Depends(current_user)):
+    return handle(lambda: import_paperlist(user, request.id))
 
 
 @app.delete("/api/corpus/{paper_id}")

@@ -73,3 +73,5 @@ Web 会话最后一次访问或写入后在 Redis 保留 24 小时；完成一�
 ## Paperlist 在线搜索
 
 在研究问题中提出在线搜索，确认计划后工作流使用 search_online：默认先搜索 Paperlist，发生服务错误或没有匹配结果时转用 arXiv，并记录来源与切换原因。明确要求 arXiv 时直接使用 arXiv；Paperlist 的分页游标只用于继续查询 Paperlist。Paperlist 覆盖其收录的 AI 会议论文，结果范围与 arXiv 不同。可在环境变量 PAPERLIST_API_KEY 或本地 paperagent.config.json 的 paperlist_api_key 中配置密钥，修改后重启。密钥应通过环境设置或被忽略的本地配置填写，切勿写入版本库。Paperlist ID 与 arXiv ID 不同；明确请求导入时，arXiv 导入工具使用 arXiv ID。测评的本地模式不会启用在线搜索工具。意图识别依赖模型生成计划，请在执行前核对计划。
+
+明确要求保存 Paperlist 结果时，工作流可用 import_paperlist 按原始 Paperlist ID 使用已保存的搜索结果入库，无需再次联网；用户明确指定而会话没有对应结果的 ID 会通过 Paperlist 查询；只能导入本轮或本会话最近一次在线搜索返回的 ID，或用户明确写出的 ID。跨轮保存时可通过 list_paperlist_search_results 分页读取上一轮已完成搜索的 ID。摘要存在时建立摘要分块和向量索引，内容标记为 abstract；缺摘要时保存题录并标记为 metadata_only，不启动向量索引。这两种情况都没有导入 PDF 全文，页数保持未知；如需全文可上传 PDF。相同用户重复导入同一 Paperlist ID 不会新增记录，后续摘要可用于升级仅题录记录。Paperlist 条目与另行上传的 PDF 暂不跨来源自动去重。模型或索引加载失败时，题录已保存，可以按相同 ID 重试摘要索引。

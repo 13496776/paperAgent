@@ -67,18 +67,11 @@ def _rpc(client, headers, method, params, request_id=None):
     raise RuntimeError("Paperlist MCP 未返回匹配的响应")
 
 
-def search_paperlist(query, *, cursor=None, client=None):
-    if not isinstance(query, str) or not query.strip() or len(query) > 300:
-        raise ValueError("query must contain 1–300 characters")
-    if cursor is not None and (not isinstance(cursor, str) or not cursor or len(cursor) > 2000):
-        raise ValueError("invalid Paperlist cursor")
+def _call_tool(name, args, client=None):
     key = os.environ.get("PAPERLIST_API_KEY", "").strip()
     if not key:
-        raise RuntimeError("请配置 PAPERLIST_API_KEY 后使用 Paperlist 搜索")
+        raise RuntimeError("请配置 PAPERLIST_API_KEY 后使用 Paperlist")
     headers = {"Authorization": "Bearer " + key, "Accept": "application/json, text/event-stream"}
-    args = {"query": query.strip(), "fields": "full", "limit": 10}
-    if cursor:
-        args["cursor"] = cursor
     owned = client is None
     client = client or httpx.Client()
     try:
@@ -89,9 +82,9 @@ def search_paperlist(query, *, cursor=None, client=None):
             raise RuntimeError("Paperlist MCP 协议版本不受支持")
         headers["MCP-Protocol-Version"] = version
         _rpc(client, headers, "notifications/initialized", {})
-        result = _rpc(client, headers, "tools/call", {"name": "search_papers", "arguments": args}, 2)
+        result = _rpc(client, headers, "tools/call", {"name": name, "arguments": args}, 2)
         if result.get("isError"):
-            raise RuntimeError("Paperlist 搜索失败，请检查 API Key 和服务状态")
+            raise RuntimeError("Paperlist 请求失败，请检查 API Key 和服务状态")
         data = result.get("structuredContent")
         if not isinstance(data, dict):
             content = result.get("content", [])
@@ -99,30 +92,10 @@ def search_paperlist(query, *, cursor=None, client=None):
             try:
                 data = json.loads(text)
             except (ValueError, TypeError) as exc:
-                raise RuntimeError("Paperlist 搜索结果格式无效") from exc
-        if not isinstance(data, dict) or not isinstance(data.get("papers"), list):
-            raise RuntimeError("Paperlist 搜索结果缺少论文列表")  # noqa: TRY004
-        papers = []
-        for paper in data["papers"]:
-            if not isinstance(paper, dict) or not isinstance(paper.get("id"), str) or not isinstance(paper.get("title"), str):
-                raise RuntimeError("Paperlist 论文记录格式无效")  # noqa: TRY004
-            links = paper.get("links") if isinstance(paper.get("links"), dict) else {}
-            url = links.get("paperlist") or paper.get("url") or ""
-            try:
-                valid_url = isinstance(url, str) and urlsplit(url).scheme in ("http", "https") and bool(urlsplit(url).hostname)
-            except ValueError:
-                valid_url = False
-            if not valid_url:
-                url = ""
-            authors = paper.get("authors")
-            papers.append({"id": paper["id"], "title": paper["title"],
-                           "authors": [a for a in authors if isinstance(a, str)] if isinstance(authors, list) else [],
-                           "abstract": paper.get("abstract") if isinstance(paper.get("abstract"), str) else "",
-                           "url": url, "published_at": paper.get("published_at"), "conference": paper.get("conference")})
-        next_cursor = data.get("next_cursor")
-        note = data.get("note")
-        return {"papers": papers, "next_cursor": next_cursor if isinstance(next_cursor, str) and next_cursor else None,
-                "note": note if isinstance(note, str) else ""}
+                raise RuntimeError("Paperlist 返回结果格式无效") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("Paperlist 返回结果格式无效")  # noqa: TRY004
+        return data
     finally:
         if headers.get("Mcp-Session-Id"):
             try:
@@ -131,3 +104,50 @@ def search_paperlist(query, *, cursor=None, client=None):
                 pass
         if owned:
             client.close()
+
+
+def _normalize_paper(paper):
+    if not isinstance(paper, dict) or not isinstance(paper.get("id"), str) or not isinstance(paper.get("title"), str) or not paper["title"].strip():
+        raise RuntimeError("Paperlist 论文记录格式无效")
+    links = paper.get("links") if isinstance(paper.get("links"), dict) else {}
+    url = links.get("paperlist") or paper.get("url") or ""
+    try:
+        parsed = urlsplit(url)
+        valid_url = parsed.scheme == "https" and parsed.hostname in ("paperlist.ai", "www.paperlist.ai") and not parsed.username
+    except (ValueError, TypeError):
+        valid_url = False
+    authors = paper.get("authors")
+    doi = links.get("doi") or paper.get("doi")
+    return {"id": paper["id"], "title": paper["title"],
+            "authors": [a for a in authors if isinstance(a, str)] if isinstance(authors, list) else [],
+            "abstract": paper.get("abstract") if isinstance(paper.get("abstract"), str) else "",
+            "url": url if valid_url else "", "doi": doi if isinstance(doi, str) else "",
+            "published_at": paper.get("published_at"), "conference": paper.get("conference")}
+
+
+def search_paperlist(query, *, cursor=None, client=None):
+    if not isinstance(query, str) or not query.strip() or len(query) > 300:
+        raise ValueError("query must contain 1–300 characters")
+    if cursor is not None and (not isinstance(cursor, str) or not cursor or len(cursor) > 2000):
+        raise ValueError("invalid Paperlist cursor")
+    args = {"query": query.strip(), "fields": "full", "limit": 10}
+    if cursor:
+        args["cursor"] = cursor
+    data = _call_tool("search_papers", args, client)
+    if not isinstance(data.get("papers"), list):
+        raise RuntimeError("Paperlist 搜索结果缺少论文列表")  # noqa: TRY004
+    next_cursor = data.get("next_cursor")
+    note = data.get("note")
+    return {"papers": [_normalize_paper(paper) for paper in data["papers"]],
+            "next_cursor": next_cursor if isinstance(next_cursor, str) and next_cursor else None,
+            "note": note if isinstance(note, str) else ""}
+
+
+def get_paperlist(ident, *, client=None):
+    if not isinstance(ident, str) or not ident.strip() or len(ident) > 200:
+        raise ValueError("invalid Paperlist ID")
+    data = _call_tool("get_paper", {"id": ident}, client)
+    paper = _normalize_paper(data.get("paper", data))
+    if paper["id"] != ident:
+        raise RuntimeError("Paperlist 返回的论文 ID 与请求不一致")
+    return paper

@@ -131,6 +131,11 @@ class SessionStore:
             ).fetchone()
         return json.loads(row[0]) if row else None
 
+    def archived_workflows(self, user, session):
+        with sqlite3.connect(self.sqlite_path) as db:
+            for row in db.execute("SELECT workflow FROM completed_workflows WHERE owner=? AND session=? ORDER BY rowid DESC", (user, session)):
+                yield json.loads(row[0])
+
     def summary(self, user, session, snapshot):
         if not snapshot:
             return ""
