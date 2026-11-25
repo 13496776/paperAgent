@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from .llm import LLM
 from .persistent import JWTAuthenticator, SessionStore
 from .runtime_config import apply_runtime_config
-from .workflow.engine import ResearchTools, Supervisor
+from .workflow.engine import ResearchTools, Supervisor, error_message
 
 apply_runtime_config()
 app = FastAPI(title="Paper Research Agent")
@@ -215,7 +215,9 @@ def handle(call):
         raise HTTPException(status_code=502, detail="无法连接模型服务或请求超时，请检查网络和服务地址") from exc
     except APIStatusError as exc:
         raise HTTPException(status_code=502, detail=f"模型服务返回 HTTP {exc.status_code}，请检查模型配置") from exc
-    except (RuntimeError, httpx.HTTPError) as exc:
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail=error_message(exc)) from exc
+    except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

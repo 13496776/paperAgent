@@ -55,6 +55,30 @@ def test_authenticated_session_plan(tmp_path, monkeypatch):
     assert client.get("/api/sessions/demo", headers=headers).json()["workflow"]["question"] == "Research?"
 
 
+def test_arxiv_timeout_error_is_visible_in_api_and_messages(tmp_path, monkeypatch):
+    import httpx
+
+    key = "test-key-that-is-long-enough-for-hs256"
+    monkeypatch.setenv("CORECODER_JWT_KEY", key)
+    monkeypatch.setenv("CORECODER_JWT_ISSUER", "issuer")
+    monkeypatch.setenv("CORECODER_JWT_AUDIENCE", "app")
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / "test.sqlite")
+    monkeypatch.setattr(web, "get_store", lambda: store)
+
+    def timeout(*args, **kwargs):
+        raise httpx.ConnectTimeout("")
+
+    monkeypatch.setattr("corecoder.papers.ingestion.search_arxiv", timeout)
+    now = int(time.time())
+    token = jwt.encode({"sub": "alice", "iss": "issuer", "aud": "app", "iat": now, "exp": now + 60},
+                       key, algorithm="HS256")
+    headers = {"Authorization": f"Bearer {token}"}
+    response = TestClient(web.app).post("/api/corpus/search", json={"query": "test"}, headers=headers)
+    assert response.status_code == 503 and "ConnectTimeout" in response.json()["detail"]
+    assert "ReadTimeout" in web.error_message(httpx.ReadTimeout(""))
+    assert "ProxyError" in web.error_message(httpx.ProxyError(""))
+
+
 def test_completed_workflow_survives_redis_expiry(tmp_path, monkeypatch):
     key = "test-key-that-is-long-enough-for-hs256"
     monkeypatch.setenv("CORECODER_JWT_KEY", key)

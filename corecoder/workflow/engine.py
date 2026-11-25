@@ -8,6 +8,8 @@ import time
 import uuid
 import weakref
 
+import httpx
+
 from corecoder.papers.evaluation import evaluate
 
 WORKERS = {
@@ -26,6 +28,16 @@ _retrieval_locks_guard = threading.Lock()
 
 
 def error_message(exc):
+    if isinstance(exc, httpx.ConnectTimeout):
+        return "网络连接超时（ConnectTimeout）"
+    if isinstance(exc, httpx.ReadTimeout):
+        return "等待服务响应超时（ReadTimeout）"
+    if isinstance(exc, httpx.ProxyError):
+        return "代理连接失败（ProxyError）"
+    if isinstance(exc, httpx.ConnectError):
+        return "网络连接失败（ConnectError），请检查 DNS、代理或目标地址"
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"远程服务返回 HTTP {exc.response.status_code}"
     return str(exc).strip() or type(exc).__name__
 
 

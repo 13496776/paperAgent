@@ -129,14 +129,22 @@ def search_arxiv(query, client=None, *, start=0, max_results=10):
     interval = float(os.environ.get("PAPER_ARXIV_SEARCH_INTERVAL", "10"))
     if not math.isfinite(interval) or interval < 3:
         raise ValueError("PAPER_ARXIV_SEARCH_INTERVAL must be finite and at least 3 seconds")
+    timeout = arxiv_api_timeout()
     request = client or httpx
     def fetch():
         response = request.get("https://export.arxiv.org/api/query", params={"search_query": "all:" + query,
-                               "start": start, "max_results": max_results}, timeout=20, follow_redirects=False)
+                               "start": start, "max_results": max_results}, timeout=timeout, follow_redirects=False)
         response.raise_for_status()
         return response
     response = _retry_arxiv(lambda: _arxiv_operation(fetch, search_interval=interval))
     return parse_arxiv_feed(response.content)
+
+
+def arxiv_api_timeout():
+    timeout = float(os.environ.get("PAPER_ARXIV_API_TIMEOUT", "20"))
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("PAPER_ARXIV_API_TIMEOUT must be positive and finite")
+    return timeout
 
 
 def parse_arxiv_feed(content):
@@ -178,9 +186,10 @@ def download_arxiv(ident, client=None):
 def get_arxiv_paper(ident, client=None):
     if not isinstance(ident, str) or not _ARXIV_ID.fullmatch(ident):
         raise ValueError("invalid arXiv identifier")
+    timeout = arxiv_api_timeout()
     request = client or httpx
     def fetch():
-        response = request.get("https://export.arxiv.org/api/query", params={"id_list": ident}, timeout=20, follow_redirects=False)
+        response = request.get("https://export.arxiv.org/api/query", params={"id_list": ident}, timeout=timeout, follow_redirects=False)
         response.raise_for_status()
         return response
     response = _retry_arxiv(lambda: _arxiv_operation(fetch))

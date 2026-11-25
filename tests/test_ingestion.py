@@ -72,6 +72,28 @@ def test_arxiv_feed_metadata():
     assert (result["year"], result["month"], result["date_source"]) == (2024, 2, "arxiv_published")
 
 
+def test_arxiv_metadata_timeout_is_configurable(monkeypatch, unpaced_arxiv):
+    import httpx
+    from corecoder.papers.ingestion import get_arxiv_paper, search_arxiv
+
+    monkeypatch.setenv("PAPER_ARXIV_API_TIMEOUT", "45")
+    seen = []
+
+    def response(request):
+        seen.append(request.extensions["timeout"]["read"])
+        return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom"/>')
+
+    with httpx.Client(transport=httpx.MockTransport(response)) as client:
+        assert search_arxiv("test", client) == []
+        with pytest.raises(ValueError, match="not found"):
+            get_arxiv_paper("2401.12345", client)
+        assert seen == [45, 45]
+        for value in ("0", "-1", "inf", "nan"):
+            monkeypatch.setenv("PAPER_ARXIV_API_TIMEOUT", value)
+            with pytest.raises(ValueError, match="positive and finite"):
+                search_arxiv("test", client)
+
+
 @pytest.fixture
 def unpaced_arxiv(monkeypatch):
     from corecoder.papers import ingestion
