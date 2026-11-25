@@ -183,7 +183,7 @@ def get_tools(user):
         return ResearchTools(UserRetriever(user))
     return ResearchTools(UserRetriever(user), online_search=search_arxiv,
                          online_import=lambda ident: import_arxiv(user, ident),
-                         paperlist_search=search_paperlist if os.environ.get("PAPERLIST_API_KEY") else None)
+                         paperlist_search=search_paperlist)
 
 
 def supervisor(provider, user):

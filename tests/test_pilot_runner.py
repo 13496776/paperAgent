@@ -7,6 +7,7 @@ pytest.importorskip('fastapi')
 fakeredis = pytest.importorskip('fakeredis')
 jwt = pytest.importorskip('jwt')
 from fastapi.testclient import TestClient
+
 from corecoder import web
 from corecoder.llm import LLMResponse, ToolCall
 from corecoder.persistent import SessionStore
@@ -75,4 +76,6 @@ def test_evaluation_mode_disables_external_tools(monkeypatch):
     monkeypatch.setenv('PAPER_EVALUATION_LOCAL_ONLY', '1')
     tools = web.get_tools('local-user')
     assert 'search_arxiv' not in [t['function']['name'] for t in tools.schemas('retrieval')]
+    assert 'search_online' not in [t['function']['name'] for t in tools.schemas('retrieval')]
+    assert 'search_paperlist' not in [t['function']['name'] for t in tools.schemas('retrieval')]
     assert tools.schemas('ingestion') == []

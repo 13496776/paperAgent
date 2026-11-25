@@ -4,13 +4,13 @@
 
 在项目根目录执行 `pip install -e '.[web,papers]'`。配置 Redis 的 `REDIS_URL`，设置 `CORECODER_JWT_KEY`、`CORECODER_JWT_ISSUER`、`CORECODER_JWT_AUDIENCE`，并由现有身份服务签发包含 `sub`、`iss`、`aud`、`iat` 和 `exp` 的 HS256 JWT。摘要数据库由 `CORECODER_SQLITE_PATH` 指定。设置 `OPENAI_API_KEY` 或 `DEEPSEEK_API_KEY`，可通过 `OPENAI_MODEL`、`DEEPSEEK_MODEL`、`OPENAI_BASE_URL`、`DEEPSEEK_BASE_URL` 覆盖默认设置。
 
-登录后可在“论文语料库”上传 PDF，系统提取文本并分块入库。也可搜索 arXiv，选择论文导入，或在研究任务中要求检索和导入 arXiv 论文。用户导入的论文按 JWT 用户 ID 隔离，论文元数据、页码和分块正文存于 `CORECODER_SQLITE_PATH`；向量持久化在 Chroma。也可按照 [论文语料说明](PAPER_QA.md) 创建共享 JSON 索引，并将 `PAPER_CORPUS_PATH` 指向该文件。首次使用会初始化嵌入模型和交叉编码器，可用 `PAPER_EMBED_MODEL`、`PAPER_RERANK_MODEL` 指向本地模型。
+登录后可在“论文语料库”上传 PDF，系统提取文本并分块入库。也可在研究问题中要求在线检索，或要求导入 arXiv 论文。用户导入的论文按 JWT 用户 ID 隔离，论文元数据、页码和分块正文存于 `CORECODER_SQLITE_PATH`；向量持久化在 Chroma。也可按照 [论文语料说明](PAPER_QA.md) 创建共享 JSON 索引，并将 `PAPER_CORPUS_PATH` 指向该文件。首次使用会初始化嵌入模型和交叉编码器，可用 `PAPER_EMBED_MODEL`、`PAPER_RERANK_MODEL` 指向本地模型。
 
 上传时可以选择多个 PDF，页面会逐个上传并显示导入、重复和失败状态；失败的文件可以再次尝试。批量上传从每个 PDF 读取元数据，手工补充的元数据只用于单篇上传。
 
 运行 `uvicorn corecoder.web:app --host 127.0.0.1 --port 8000`。在 `web` 目录运行 `npm ci` 和 `npm run dev`。页面输入 JWT 和会话 ID，生成计划并确认后执行。可用同一会话 ID 加载任务状态，已完成后可以提交修改要求。
 
-Supervisor 根据问题生成依赖有序的任务，五类 worker 分别对应数据接入、推理分析、文献检索、生成交付和测评运维。文献检索 worker 支持本地论文清单与计数、语义检索及 arXiv 在线检索，数据接入 worker 支持从 arXiv 导入 PDF，测评 worker 支持标注指标计算。其他角色由模型进行文本分析，尚未接入图表视觉识别、代码执行、文件导出或运维部署工具。任务状态和工具调用结果存储在 Redis，最后一次读取或写入 24 小时后过期，会话较长时将旧对话摘要保存到 SQLite。已完成的研究结果、子任务输出和执行追踪按用户及会话归档到 `CORECODER_SQLITE_PATH` 指定的 SQLite 数据库。Redis 会话过期后，仍可用原会话 ID 加载最近一次归档的研究结果。未完成的任务和对话上下文随 Redis 会话过期，SQLite 中的结果及摘要会保留。归档功能上线前已完成的结果仍按原 Redis 会话的有效期保留。计划生成后等待用户确认；确认后页面显示提交中，并从后端同步工作流及子任务状态，连接失败时显示同步错误。会话 ID 在当前浏览器标签页中保留，刷新后可继续加载。执行过程中可请求暂停或取消，系统在当前模型或工具调用完成后处理请求。已保存的工具回执会在恢复时使用，结果不明的工具调用不会自动重复执行。
+Supervisor 根据问题生成依赖有序的任务，五类 worker 分别对应数据接入、推理分析、文献检索、生成交付和测评运维。文献检索 worker 支持本地论文清单与计数、语义检索及在线检索，数据接入 worker 支持从 arXiv 导入 PDF，测评 worker 支持标注指标计算。其他角色由模型进行文本分析，尚未接入图表视觉识别、代码执行、文件导出或运维部署工具。任务状态和工具调用结果存储在 Redis，最后一次读取或写入 24 小时后过期，会话较长时将旧对话摘要保存到 SQLite。已完成的研究结果、子任务输出和执行追踪按用户及会话归档到 `CORECODER_SQLITE_PATH` 指定的 SQLite 数据库。Redis 会话过期后，仍可用原会话 ID 加载最近一次归档的研究结果。未完成的任务和对话上下文随 Redis 会话过期，SQLite 中的结果及摘要会保留。归档功能上线前已完成的结果仍按原 Redis 会话的有效期保留。计划生成后等待用户确认；确认后页面显示提交中，并从后端同步工作流及子任务状态，连接失败时显示同步错误。会话 ID 在当前浏览器标签页中保留，刷新后可继续加载。执行过程中可请求暂停或取消，系统在当前模型或工具调用完成后处理请求。已保存的工具回执会在恢复时使用，结果不明的工具调用不会自动重复执行。
 
 执行中的暂停与取消为协作式操作，不能强制中断正在进行的模型请求或工具调用。子任务使用受限工具列表，但尚未提供操作系统级沙箱或独立容器。模型输出及引用仍需核验。前后端和 Redis 的访问控制、传输加密和部署配置需要根据实际运行环境设置。
 
@@ -72,4 +72,4 @@ Web 会话最后一次访问或写入后在 Redis 保留 24 小时；完成一�
 
 ## Paperlist 在线搜索
 
-可在环境变量 PAPERLIST_API_KEY 或本地 paperagent.config.json 的 paperlist_api_key 中配置 Paperlist API Key，重启后前端默认选择 Paperlist，仍可手动切换至 arXiv。密钥应通过环境设置或被忽略的本地配置填写，切勿写入版本库。Paperlist MCP 搜索覆盖其收录的 AI 会议论文，返回结果和分页游标；结果可打开 Paperlist 页面。Paperlist ID 与 arXiv ID 不同，前端的 arXiv 导入功能仍使用 arXiv 搜索结果。研究工作流在允许在线搜索且配置了密钥时可调用 search_paperlist。测评的本地模式不会启用该工具。
+在研究问题中提出在线搜索，确认计划后工作流使用 search_online：默认先搜索 Paperlist，发生服务错误或没有匹配结果时转用 arXiv，并记录来源与切换原因。明确要求 arXiv 时直接使用 arXiv；Paperlist 的分页游标只用于继续查询 Paperlist。Paperlist 覆盖其收录的 AI 会议论文，结果范围与 arXiv 不同。可在环境变量 PAPERLIST_API_KEY 或本地 paperagent.config.json 的 paperlist_api_key 中配置密钥，修改后重启。密钥应通过环境设置或被忽略的本地配置填写，切勿写入版本库。Paperlist ID 与 arXiv ID 不同；明确请求导入时，arXiv 导入工具使用 arXiv ID。测评的本地模式不会启用在线搜索工具。意图识别依赖模型生成计划，请在执行前核对计划。

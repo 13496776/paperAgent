@@ -38,15 +38,9 @@ const paperMonth = ref('')
 const ccfSource = ref('')
 const ccfVersion = ref('')
 const ccfVerified = ref(false)
-const searchQuery = ref('')
-const searchProvider = ref<'arxiv' | 'paperlist'>('arxiv')
-const searchProviderSelected = ref(false)
-const paperlistCursor = ref<string | null>(null)
 const papers = ref<{id: string; title: string; authors: string | string[]; doi: string; source: string; year?: number | null; month?: number | null; date_source?: string; page_count?: number | null; ccf_rank?: string | null; status?: string; error?: string | null}[]>([])
 const corpusLoaded = ref(false)
-const results = ref<{id: string; title: string; authors: string[]; abstract: string; provider: 'arxiv' | 'paperlist'; url?: string}[]>([])
 const notice = ref('')
-watch([searchQuery, searchProvider], () => { results.value = []; paperlistCursor.value = null })
 onMounted(async () => {
   try {
     token.value = sessionStorage.getItem('paperagent_token') || ''
@@ -82,21 +76,19 @@ onMounted(async () => {
     if (response.ok) {
       const settings = await response.json()
       provider.value = settings.default_provider
-      if (settings.paperlist_enabled && !searchProviderSelected.value && !corpusBusy.value && !searchQuery.value) searchProvider.value = 'paperlist'
     }
   } catch {
     // The model selector remains available if the backend is temporarily unavailable.
   }
 })
-async function corpusRequest(path: string, body?: BodyInit, contentType?: string, method?: string) {
+async function corpusRequest(path: string, body?: BodyInit, method?: string) {
   const headers: Record<string, string> = { Authorization: `Bearer ${token.value}` }
-  if (contentType) headers['Content-Type'] = contentType
   const response = await fetch(`/api/corpus${path}`, { method: method || (body ? 'POST' : 'GET'), headers, body })
   const data = await response.json().catch(() => ({ detail: `服务请求失败（HTTP ${response.status}）` }))
   if (!response.ok) throw new Error(response.status === 401 ? '访问令牌无效或已过期，请重新启动程序或粘贴有效令牌。' : data.detail || '请求失败')
   return data
 }
-async function corpusAction(action: 'load' | 'upload' | 'search' | 'search_more' | 'import' | 'delete', id = '') {
+async function corpusAction(action: 'load' | 'upload' | 'delete', id = '') {
   corpusBusy.value = true; error.value = ''; notice.value = ''
   try {
     if (action === 'upload' && pdfs.value.length) {
@@ -135,31 +127,11 @@ async function corpusAction(action: 'load' | 'upload' | 'search' | 'search_more'
       }
     }
     if (action === 'delete') {
-      await corpusRequest(`/${encodeURIComponent(id)}`, undefined, undefined, 'DELETE')
+      await corpusRequest(`/${encodeURIComponent(id)}`, undefined, 'DELETE')
       notice.value = '论文及其向量已删除'
     }
-    if (action === 'search' || action === 'search_more') {
-      if (searchProvider.value === 'paperlist') {
-        const body = { query: searchQuery.value, ...(action === 'search_more' ? { cursor: paperlistCursor.value } : {}) }
-        const response = await corpusRequest('/paperlist/search', JSON.stringify(body), 'application/json')
-        const next = response.papers.map((item: typeof results.value[number]) => ({ ...item, provider: 'paperlist' as const }))
-        results.value = action === 'search_more' ? [...results.value, ...next] : next
-        paperlistCursor.value = response.next_cursor
-        if (response.note) notice.value = response.note
-      } else {
-        const response = await corpusRequest('/search', JSON.stringify({query: searchQuery.value}), 'application/json')
-        results.value = response.map((item: typeof results.value[number]) => ({ ...item, provider: 'arxiv' as const }))
-      }
-      if (!results.value.length) notice.value = '没有找到匹配的论文'
-    }
-    if (action === 'import') {
-      const result = await corpusRequest('/import', JSON.stringify({id}), 'application/json')
-      notice.value = result.created ? `已导入 ${result.title}，生成 ${result.chunks} 个分块` : '该论文已经导入'
-    }
-    if (action !== 'search' && action !== 'search_more') {
-      papers.value = await corpusRequest('')
-      corpusLoaded.value = true
-    }
+    papers.value = await corpusRequest('')
+    corpusLoaded.value = true
   } catch (e) { error.value = e instanceof Error ? e.message : '语料库请求失败' }
   finally { corpusBusy.value = false }
 }
@@ -263,16 +235,12 @@ async function act(action: 'plan' | 'resume' | 'load') {
   <main><header><div><div class="eyebrow">RESEARCH WORKSPACE</div><h1>研究工作台</h1><p>规划研究任务，追踪证据与执行进度。</p></div><span class="header-tag">SUPERVISOR / WORKERS</span></header>
   <div class="workspace"><section class="primary">
     <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off" :disabled="corpusBusy"></label><label>会话 ID<input v-model="session" :disabled="busy || ['planning', 'running'].includes(workflow?.status || '')"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
-    <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块，或检索并导入 arXiv 论文。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
+    <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
       <div class="corpus-row"><input ref="pdfInput" type="file" accept="application/pdf,.pdf" multiple :disabled="corpusBusy" @change="choosePdf"><select v-if="!batchSelection" v-model="ccfRank" aria-label="CCF 等级"><option value="">CCF 未核验</option><option value="A">CCF-A</option><option value="B">CCF-B</option><option value="C">CCF-C</option><option value="无类别">无类别</option></select><button :disabled="corpusBusy || !token || !pdfs.length" @click="corpusAction('upload')">{{ uploadResults.some(item => item.status === 'failed') ? `重试失败文件（${pdfs.length}）` : '上传并建库' }}</button></div>
       <p v-if="batchSelection" class="corpus-notice">批量上传将从各 PDF 提取元数据。单篇手工填写的元数据不会应用到批量文件。</p>
       <details v-if="!batchSelection"><summary>补充论文元数据（可选）</summary><div class="metadata-fields"><label>标题<input v-model="paperTitle"></label><label>作者<input v-model="paperAuthors" placeholder="多位作者用逗号分隔"></label><label>DOI<input v-model="paperDoi"></label><label>期刊或会议<input v-model="paperVenue"></label><label>发表年份<input v-model="paperYear" inputmode="numeric" placeholder="例如 2024"></label><label>发表月份<input v-model="paperMonth" inputmode="numeric" placeholder="1–12，需填写年份"></label><label>CCF 来源<input v-model="ccfSource"></label><label>CCF 版本<input v-model="ccfVersion"></label><label class="checkbox"><input v-model="ccfVerified" type="checkbox"> 已根据来源和版本核验 CCF 等级</label></div></details>
       <ul v-if="uploadResults.length" class="upload-results" aria-live="polite"><li v-for="(item, index) in uploadResults" :key="index" :class="{ 'upload-failed': item.status === 'failed' }"><span>{{ item.name }}</span><span>{{ item.detail }}</span></li></ul>
-      <div class="corpus-row"><select v-model="searchProvider" aria-label="在线搜索来源" :disabled="corpusBusy" @change="searchProviderSelected = true"><option value="arxiv">arXiv</option><option value="paperlist">Paperlist</option></select><input v-model="searchQuery" placeholder="搜索在线论文" :disabled="corpusBusy"><button class="secondary" :disabled="corpusBusy || !token || !searchQuery.trim()" @click="corpusAction('search')">在线检索</button></div>
-      <p v-if="searchProvider === 'paperlist'" class="corpus-notice">Paperlist 搜索会议论文，需要配置 Paperlist API Key。</p>
       <p v-if="notice" class="corpus-notice">{{ notice }}</p><p v-if="corpusLoaded" class="corpus-notice">当前个人语料已导入 {{ papers.length }} 篇论文。</p>
-      <div v-for="item in results" :key="item.id" class="corpus-item"><div><strong>{{ item.title }}</strong><small>{{ item.authors.join('、') }} · {{ item.id }}</small><p>{{ item.abstract }}</p><a v-if="item.provider === 'paperlist' && item.url" :href="item.url" target="_blank" rel="noopener noreferrer">查看论文</a></div><button v-if="item.provider === 'arxiv'" class="secondary" :disabled="corpusBusy" @click="corpusAction('import', item.id)">导入</button></div>
-      <button v-if="searchProvider === 'paperlist' && paperlistCursor" class="secondary" :disabled="corpusBusy" @click="corpusAction('search_more')">加载更多</button>
       <details v-if="papers.length"><summary>已导入 {{ papers.length }} 篇论文</summary><div v-for="paper in papers" :key="paper.id" class="corpus-item"><div><strong>{{ paper.title }}</strong><small>{{ (Array.isArray(paper.authors) ? paper.authors.join('、') : paper.authors) || '作者未知' }} · {{ paper.doi || 'DOI 未知' }}</small><small>{{ paper.year ? (paper.date_source === 'arxiv_published' ? 'arXiv 首次公开 ' : '发表 ') + paper.year + (paper.month ? '-' + String(paper.month).padStart(2, '0') : '') : '日期未知' }} · {{ paper.source }} · {{ paper.page_count ? paper.page_count + ' 页' : '页数未知' }} · {{ paper.ccf_rank ? 'CCF ' + paper.ccf_rank : 'CCF 未核验' }} · {{ paper.status || '可用' }}</small><small v-if="paper.error">{{ paper.error }}</small></div><button class="secondary" :disabled="corpusBusy" @click="deletePaper(paper.id, paper.title)">删除</button></div></details>
     </div>
     <div class="card"><div class="card-head"><div><h2>开始研究</h2><p>描述你的研究问题，先生成可审阅的任务计划。</p></div><select v-model="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option></select></div><textarea v-model="question" placeholder="例如：比较混合检索与重排序的作用，并整理证据来源。"></textarea><div class="prompt-footer"><span>计划生成后需要确认才会执行</span><button :disabled="busy || !token || !question.trim()" @click="act('plan')">{{ busy ? '处理中…' : '生成计划 →' }}</button></div></div>

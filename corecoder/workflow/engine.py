@@ -96,10 +96,16 @@ class ResearchTools:
                 tools.append({"type": "function", "function": {"name": "list_corpus_papers",
                     "description": "List local papers and exact count; optionally filter by recorded year. arXiv years are first-publication years, not necessarily journal publication years. Papers with unknown year are excluded and reported as unknown_year_count.",
                     "parameters": {"type": "object", "properties": {"year": {"type": "integer", "minimum": 1000, "maximum": 9999}}, "additionalProperties": False}}})
-            if self.online_search:
+            if self.online_search and self.paperlist_search:
+                tools.append({"type": "function", "function": {"name": "search_online",
+                    "description": "Search online papers. Omit source for automatic Paperlist-first search with arXiv fallback on failure or no matches. Paperlist covers indexed AI conferences. Use source=arxiv when explicitly requested; use source=paperlist only if other sources are forbidden. A Paperlist cursor can only continue Paperlist results.",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "source": {"type": "string", "enum": ["auto", "arxiv", "paperlist"]}, "cursor": {"type": "string"}},
+                        "required": ["query"], "additionalProperties": False}}})
+            elif self.online_search:
                 tools.append({"type": "function", "function": {"name": "search_arxiv", "description": "Search arXiv metadata. Official API URL format: http://export.arxiv.org/api/{method_name}?{parameters}; this tool uses HTTPS and the query method. Do not import papers unless requested.",
                     "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "start": {"type": "integer", "minimum": 0}, "max_results": {"type": "integer", "minimum": 1, "maximum": 50}}, "required": ["query"], "additionalProperties": False}}})
-            if self.paperlist_search:
+            elif self.paperlist_search:
                 tools.append({"type": "function", "function": {"name": "search_paperlist",
                     "description": "Search Paperlist's AI conference paper catalog; returns metadata and a pagination cursor. Coverage is limited to Paperlist's indexed conferences.",
                     "parameters": {"type": "object", "properties": {"query": {"type": "string", "minLength": 1, "maxLength": 300}, "cursor": {"type": "string"}},
@@ -121,6 +127,11 @@ class ResearchTools:
 
     def execute(self, worker, name, args, progress=None):
         allowed = {schema["function"]["name"] for schema in self.schemas(worker)}
+        if worker == "retrieval":
+            if self.online_search:
+                allowed.add("search_arxiv")
+            if self.paperlist_search:
+                allowed.add("search_paperlist")
         if name not in allowed:
             raise ValueError(f"tool {name} is not allowed for {worker}")
         if name == "retrieve_chunks":
@@ -132,6 +143,8 @@ class ResearchTools:
             if "year" not in args:
                 return self.retriever.list_papers()
             return self.retriever.list_papers(year=args["year"])
+        if name == "search_online":
+            return self._search_online(args, progress)
         if name == "search_arxiv":
             options = {key: args[key] for key in ("start", "max_results") if key in args}
             return self.online_search(args["query"], **options)
@@ -140,6 +153,43 @@ class ResearchTools:
         if name == "import_arxiv":
             return self.online_import(args["id"])
         return evaluate(args["rows"])
+
+    def _search_online(self, args, progress):
+        query = args.get("query")
+        source = args.get("source", "auto")
+        cursor = args.get("cursor")
+        if not isinstance(query, str) or not query.strip() or len(query) > 300:
+            raise ValueError("query must contain 1–300 characters")
+        if source not in ("auto", "paperlist", "arxiv"):
+            raise ValueError("invalid online search source")
+        if cursor is not None and (source == "arxiv" or not isinstance(cursor, str) or not cursor):
+            raise ValueError("cursor is only supported for Paperlist")
+        reason = None
+        if source != "arxiv":
+            if progress:
+                progress("online_search", "在线搜索：Paperlist")
+            try:
+                result = self.paperlist_search(query, cursor=cursor)
+            except (RuntimeError, httpx.HTTPError, OSError) as exc:
+                if source == "paperlist" or cursor is not None:
+                    raise
+                reason = f"Paperlist 搜索失败：{error_message(exc)}"
+            else:
+                if result.get("papers") or result.get("next_cursor") or cursor is not None or source == "paperlist":
+                    return {**result, "source": "paperlist"}
+                reason = "Paperlist 未找到匹配论文"
+        if progress:
+            progress("online_search", "在线搜索：arXiv（备用）" if reason else "在线搜索：arXiv")
+        try:
+            papers = self.online_search(query)
+        except (RuntimeError, httpx.HTTPError, OSError) as exc:
+            if reason:
+                raise RuntimeError(f"{reason}；arXiv 搜索失败：{error_message(exc)}") from exc
+            raise
+        result = {"source": "arxiv", "papers": papers, "next_cursor": None}
+        if reason:
+            result["fallback_reason"] = reason
+        return result
 
     def _retrieve_with_timeout(self, query, progress):
         timeout = float(os.environ.get("PAPER_RETRIEVAL_TIMEOUT", "180"))
@@ -259,6 +309,7 @@ class Supervisor:
                 retrieval_names = {s["function"]["name"] for s in self.tools.schemas("retrieval")}
                 online = "search_arxiv" in retrieval_names
                 paperlist = "search_paperlist" in retrieval_names
+                unified_search = "search_online" in retrieval_names
                 planning_messages = [
                     {"role": "system", "content": "You are a research supervisor. Return JSON only: {\"tasks\":[{\"id\":"
                      "\"...\",\"worker\":\"retrieval|ingestion|analysis|delivery|evaluation\",\"goal\":\"...\","
@@ -272,13 +323,17 @@ class Supervisor:
                      "Use list_corpus_papers for corpus inventory and metadata filters such as publication year, "
                      "passing year when specified. Do not use retrieve_chunks for metadata-only listing or counting. "
                      "Never estimate counts from retrieved chunks. "
+                     + ("When the user's request needs or explicitly permits online search, plan a retrieval task using "
+                        "search_online. It tries Paperlist first and falls back to arXiv if unavailable or empty. "
+                        "If the user explicitly requests arXiv, select arXiv. Respect requests to use only local papers. "
+                        "Do not import papers unless explicitly requested. " if unified_search else "")
                      + ("Paperlist conference search is available; prefer it for online searches unless arXiv is explicitly requested. "
                         "Its catalog covers indexed AI conferences, not all papers. " if paperlist else "")
                      + ("Online search_arxiv is available. The official arXiv API URL format is "
                         "http://export.arxiv.org/api/{method_name}?{parameters}; use search_arxiv for API requests. "
                         "Only use it when online search is requested or allowed; "
                         "only plan import_arxiv if the user explicitly requests import. " if online else
-                        "Online search and import are unavailable; do not plan online work. ")},
+                        "" if unified_search or paperlist else "Online search and import are unavailable; do not plan online work. ")},
                     {"role": "user", "content": json.dumps({"question": question, "summary": summary, "history": history[-10:]},
                                                               ensure_ascii=False)},
                 ]
@@ -466,7 +521,7 @@ class Supervisor:
                         evidence = [{"tool": call["name"], "result": call["result"]}
                                     for call in dependency.get("calls", [])
                                     if call.get("status") == "completed" and call.get("name") in
-                                    ("retrieve_chunks", "list_corpus_papers", "search_arxiv", "search_paperlist")]
+                                    ("retrieve_chunks", "list_corpus_papers", "search_arxiv", "search_paperlist", "search_online")]
                         results[dependency["id"]] = {"summary": dependency["result"], "evidence": evidence,
                                                      "budget_exhausted": bool(dependency.get("budget_exhausted"))}
                     messages = task.get("messages") or [{"role": "system", "content": f"You are the {task['worker']} research worker: "
@@ -478,10 +533,14 @@ class Supervisor:
                                  "from journal publication dates. Never infer totals from "
                                  "retrieved passages. If retrieval returns no evidence, explicitly say so. "
                                  "Use only necessary searches; reuse prior evidence, and stop once the question is supported. "
+                                 "When the user requests or permits online search and search_online is available, use it. "
+                                 "Leave source unset for automatic fallback; use source=arxiv if explicitly requested, or "
+                                 "source=paperlist only when other sources are forbidden. Report the actual source and fallback_reason, "
+                                 "and do not use online tools "
+                                 "for local-only requests. "
                                  "When search_paperlist is available, prefer it for online searches unless arXiv is explicitly requested. "
                                  "Paperlist searches its conference catalog and may not include every paper. "
-                                 "For arXiv, the official API URL format is http://export.arxiv.org/api/{method_name}?{parameters}; "
-                                 "use the provided search_arxiv tool for API requests. "
+                                 "For arXiv use search_online with source=arxiv when available, otherwise use search_arxiv. "
                                  "If the budget is exhausted, explain missing evidence rather than inventing it."},
                                 {"role": "user", "content": json.dumps({"question": workflow["question"], "goal": task["goal"],
                                   "dependencies": results, "previous_evidence": evidence_catalog,

@@ -106,7 +106,7 @@ def test_paperlist_web_auth_and_workflow_tool(monkeypatch):
     assert result.status_code == 200 and result.json()["next_cursor"] == "next"
     tools = ResearchTools(paperlist_search=search)
     assert tools.execute("retrieval", "search_paperlist", {"query": "agents"})["papers"][0]["id"] == "p1"
-    assert "search_paperlist" in [schema["function"]["name"] for schema in web.get_tools("alice").schemas("retrieval")]
+    assert "search_online" in [schema["function"]["name"] for schema in web.get_tools("alice").schemas("retrieval")]
 
 
 def test_paperlist_evidence_reaches_delivery_worker(tmp_path):
