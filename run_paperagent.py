@@ -130,7 +130,7 @@ def main():
         test_env.pop("PAPER_CONFIG_PATH", None)
         test_env["PAPER_DISABLE_CONFIG"] = "1"
         subprocess.run([sys.executable, "-m", "pytest", "tests/", "-q", "-rs"], check=True, cwd=ROOT, env=test_env)
-        subprocess.run([node, "--test", "tests/workflowSync.test.mjs"], check=True, cwd=ROOT / "web")
+        subprocess.run([node, "--test", "tests/workflowSync.test.mjs", "tests/batchUpload.test.mjs"], check=True, cwd=ROOT / "web")
         vue_tsc = ROOT / "web" / "node_modules" / "vue-tsc" / "bin" / "vue-tsc.js"
         subprocess.run([node, str(vue_tsc), "--noEmit"], check=True, cwd=ROOT / "web")
         subprocess.run([node, str(vite), "build"], check=True, cwd=ROOT / "web")

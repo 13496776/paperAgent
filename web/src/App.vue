@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { createWorkflowSync } from './workflowSync.mjs'
+import { uploadPapers, type UploadStatus } from './batchUpload.mjs'
 type Activity = { stage: string; detail: string; status: string; started_at: number; duration_ms?: number; elapsed_ms?: number }
 type Task = { id: string; worker: string; goal: string; depends_on: string[]; status: string; result?: string; error?: string; activities?: Activity[]; calls?: {id?: string; name?: string; status: string; error?: string}[] }
 type Workflow = { question: string; status: string; tasks: Task[]; revision?: number; result?: string; error?: string; trace?: unknown[]; control_requested?: string }
@@ -23,8 +24,10 @@ const syncError = ref('')
 let pollInFlight = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const corpusBusy = ref(false)
-const pdf = ref<File | null>(null)
+const pdfs = ref<File[]>([])
 const pdfInput = ref<HTMLInputElement | null>(null)
+const batchSelection = ref(false)
+const uploadResults = ref<{ name: string; status: 'pending' | UploadStatus['status']; detail: string }[]>([])
 const ccfRank = ref('')
 const paperTitle = ref('')
 const paperAuthors = ref('')
@@ -88,25 +91,40 @@ async function corpusRequest(path: string, body?: BodyInit, contentType?: string
 async function corpusAction(action: 'load' | 'upload' | 'search' | 'import' | 'delete', id = '') {
   corpusBusy.value = true; error.value = ''; notice.value = ''
   try {
-    if (action === 'upload' && pdf.value) {
-      const form = new FormData()
-      form.append('file', pdf.value)
-      form.append('ccf_rank', ccfRank.value)
-      form.append('title', paperTitle.value)
-      form.append('authors', paperAuthors.value)
-      form.append('doi', paperDoi.value)
-      form.append('venue', paperVenue.value)
-      if (paperYear.value.trim()) form.append('year', paperYear.value.trim())
-      if (paperMonth.value.trim()) form.append('month', paperMonth.value.trim())
-      form.append('ccf_source', ccfSource.value)
-      form.append('ccf_version', ccfVersion.value)
-      form.append('ccf_verified', String(ccfVerified.value))
-      const result = await corpusRequest('/upload', form)
-      notice.value = result.created ? `已导入 ${result.title}，生成 ${result.chunks} 个分块` : '该论文已经导入'
-      pdf.value = null
+    if (action === 'upload' && pdfs.value.length) {
+      const selected = [...pdfs.value]
+      const isBatch = batchSelection.value
+      const metadata = {
+        ccf_rank: ccfRank.value, title: paperTitle.value, authors: paperAuthors.value, doi: paperDoi.value,
+        venue: paperVenue.value, year: paperYear.value.trim(), month: paperMonth.value.trim(),
+        ccf_source: ccfSource.value, ccf_version: ccfVersion.value, ccf_verified: String(ccfVerified.value),
+      }
+      uploadResults.value = selected.map(file => ({ name: file.name, status: 'pending', detail: '等待上传' }))
+      const outcomes = await uploadPapers(selected, async file => {
+        const form = new FormData()
+        form.append('file', file)
+        if (!isBatch) {
+          for (const [key, value] of Object.entries(metadata)) {
+            if (value || (key !== 'year' && key !== 'month')) form.append(key, value)
+          }
+        }
+        return corpusRequest('/upload', form)
+      }, (index, status) => {
+        let detail = '正在上传和建库'
+        if (status.status === 'created') detail = `已导入，生成 ${status.result.chunks} 个分块`
+        if (status.status === 'duplicate') detail = '该论文已经导入'
+        if (status.status === 'failed') detail = `失败：${status.error}`
+        uploadResults.value[index] = { name: selected[index].name, status: status.status, detail }
+      })
+      const failed = selected.filter((_, index) => outcomes[index].status === 'failed')
+      pdfs.value = failed
       if (pdfInput.value) pdfInput.value.value = ''
-      ccfRank.value = ''; paperTitle.value = ''; paperAuthors.value = ''; paperDoi.value = ''
-      paperVenue.value = ''; paperYear.value = ''; ccfSource.value = ''; ccfVersion.value = ''; ccfVerified.value = false
+      notice.value = `处理完成，共 ${selected.length} 个文件，${failed.length} 个失败${failed.length ? '，可重试失败文件' : ''}`
+      if (!failed.length) {
+        batchSelection.value = false
+        ccfRank.value = ''; paperTitle.value = ''; paperAuthors.value = ''; paperDoi.value = ''
+        paperVenue.value = ''; paperYear.value = ''; paperMonth.value = ''; ccfSource.value = ''; ccfVersion.value = ''; ccfVerified.value = false
+      }
     }
     if (action === 'delete') {
       await corpusRequest(`/${encodeURIComponent(id)}`, undefined, undefined, 'DELETE')
@@ -128,7 +146,9 @@ function deletePaper(id: string, title: string) {
   if (window.confirm(`确认删除论文《${title}》及其检索索引？`)) void corpusAction('delete', id)
 }
 function choosePdf(event: Event) {
-  pdf.value = (event.target as HTMLInputElement).files?.[0] || null
+  pdfs.value = Array.from((event.target as HTMLInputElement).files || [])
+  batchSelection.value = pdfs.value.length > 1
+  uploadResults.value = []
 }
 function elapsed(activity: Activity) {
   const milliseconds = activity.duration_ms ?? activity.elapsed_ms ?? Math.max(0, now.value - activity.started_at * 1000)
@@ -221,10 +241,12 @@ async function act(action: 'plan' | 'resume' | 'load') {
   <div class="layout"><aside class="sidebar"><div class="brand"><span class="mark">P</span><div>Paper Lab<small>RESEARCH WORKSPACE</small></div></div><div class="side-label">工作空间</div><div class="nav">◫ &nbsp; 研究工作台</div><div class="side-bottom">● &nbsp; 本地研究环境</div></aside>
   <main><header><div><div class="eyebrow">RESEARCH WORKSPACE</div><h1>研究工作台</h1><p>规划研究任务，追踪证据与执行进度。</p></div><span class="header-tag">SUPERVISOR / WORKERS</span></header>
   <div class="workspace"><section class="primary">
-    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off"></label><label>会话 ID<input v-model="session" :disabled="busy || ['planning', 'running'].includes(workflow?.status || '')"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
+    <div class="card"><div class="card-head"><div><h2>会话连接</h2><p>使用一键启动时会自动连接；也可手动输入访问令牌。</p></div></div><div class="access-fields"><label>访问令牌<input v-model="token" type="password" placeholder="JWT Bearer token" autocomplete="off" :disabled="corpusBusy"></label><label>会话 ID<input v-model="session" :disabled="busy || ['planning', 'running'].includes(workflow?.status || '')"></label><button class="secondary" :disabled="busy || !token || !session" @click="act('load')">加载会话</button></div></div>
     <div class="card"><div class="card-head"><div><h2>论文语料库</h2><p>上传 PDF 自动提取与分块，或检索并导入 arXiv 论文。</p></div><button class="secondary" :disabled="corpusBusy || !token" @click="corpusAction('load')">查看已导入</button></div>
-      <div class="corpus-row"><input ref="pdfInput" type="file" accept="application/pdf,.pdf" @change="choosePdf"><select v-model="ccfRank" aria-label="CCF 等级"><option value="">CCF 未核验</option><option value="A">CCF-A</option><option value="B">CCF-B</option><option value="C">CCF-C</option><option value="无类别">无类别</option></select><button :disabled="corpusBusy || !token || !pdf" @click="corpusAction('upload')">上传并建库</button></div>
-      <details><summary>补充论文元数据（可选）</summary><div class="metadata-fields"><label>标题<input v-model="paperTitle"></label><label>作者<input v-model="paperAuthors" placeholder="多位作者用逗号分隔"></label><label>DOI<input v-model="paperDoi"></label><label>期刊或会议<input v-model="paperVenue"></label><label>发表年份<input v-model="paperYear" inputmode="numeric" placeholder="例如 2024"></label><label>发表月份<input v-model="paperMonth" inputmode="numeric" placeholder="1–12，需填写年份"></label><label>CCF 来源<input v-model="ccfSource"></label><label>CCF 版本<input v-model="ccfVersion"></label><label class="checkbox"><input v-model="ccfVerified" type="checkbox"> 已根据来源和版本核验 CCF 等级</label></div></details>
+      <div class="corpus-row"><input ref="pdfInput" type="file" accept="application/pdf,.pdf" multiple :disabled="corpusBusy" @change="choosePdf"><select v-if="!batchSelection" v-model="ccfRank" aria-label="CCF 等级"><option value="">CCF 未核验</option><option value="A">CCF-A</option><option value="B">CCF-B</option><option value="C">CCF-C</option><option value="无类别">无类别</option></select><button :disabled="corpusBusy || !token || !pdfs.length" @click="corpusAction('upload')">{{ uploadResults.some(item => item.status === 'failed') ? `重试失败文件（${pdfs.length}）` : '上传并建库' }}</button></div>
+      <p v-if="batchSelection" class="corpus-notice">批量上传将从各 PDF 提取元数据。单篇手工填写的元数据不会应用到批量文件。</p>
+      <details v-if="!batchSelection"><summary>补充论文元数据（可选）</summary><div class="metadata-fields"><label>标题<input v-model="paperTitle"></label><label>作者<input v-model="paperAuthors" placeholder="多位作者用逗号分隔"></label><label>DOI<input v-model="paperDoi"></label><label>期刊或会议<input v-model="paperVenue"></label><label>发表年份<input v-model="paperYear" inputmode="numeric" placeholder="例如 2024"></label><label>发表月份<input v-model="paperMonth" inputmode="numeric" placeholder="1–12，需填写年份"></label><label>CCF 来源<input v-model="ccfSource"></label><label>CCF 版本<input v-model="ccfVersion"></label><label class="checkbox"><input v-model="ccfVerified" type="checkbox"> 已根据来源和版本核验 CCF 等级</label></div></details>
+      <ul v-if="uploadResults.length" class="upload-results" aria-live="polite"><li v-for="(item, index) in uploadResults" :key="index" :class="{ 'upload-failed': item.status === 'failed' }"><span>{{ item.name }}</span><span>{{ item.detail }}</span></li></ul>
       <div class="corpus-row"><input v-model="searchQuery" placeholder="搜索 arXiv 论文"><button class="secondary" :disabled="corpusBusy || !token || !searchQuery.trim()" @click="corpusAction('search')">在线检索</button></div>
       <p v-if="notice" class="corpus-notice">{{ notice }}</p><p v-if="corpusLoaded" class="corpus-notice">当前个人语料已导入 {{ papers.length }} 篇论文。</p>
       <div v-for="item in results" :key="item.id" class="corpus-item"><div><strong>{{ item.title }}</strong><small>{{ item.authors.join('、') }} · {{ item.id }}</small><p>{{ item.abstract }}</p></div><button class="secondary" :disabled="corpusBusy" @click="corpusAction('import', item.id)">导入</button></div>
