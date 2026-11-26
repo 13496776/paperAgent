@@ -79,3 +79,73 @@ def test_evaluation_mode_disables_external_tools(monkeypatch):
     assert 'search_online' not in [t['function']['name'] for t in tools.schemas('retrieval')]
     assert 'search_paperlist' not in [t['function']['name'] for t in tools.schemas('retrieval')]
     assert tools.schemas('ingestion') == []
+
+
+def test_streamed_report_resume_imports_legacy_and_preserves_metrics(tmp_path, monkeypatch, capsys):
+    import sys
+    from evaluation import run_pilot
+    from evaluation.report_store import brief
+
+    old_record = {'id': 'PC-001', 'category': 'x', 'turns': [], 'judge': {},
+                  'target_workflow': {'status': 'completed', 'tasks': []},
+                  'observation': {'calls': [], 'tool_selection_names_ok': True,
+                                  'labeled_evidence_hits': 0, 'labeled_evidence_total': 0,
+                                  'groups_hit': 0, 'groups_total': 0}}
+    assert metrics([brief(old_record)]) == metrics([old_record])
+    legacy = tmp_path / 'old.json'
+    legacy.write_text(json.dumps({'dataset_id': 'd', 'provider': 'deepseek', 'started_at': 1,
+                                 'judge_enabled': False, 'cases': [old_record]}, indent=2), encoding='utf-8')
+    ds = tmp_path / 'data.json'
+    ds.write_text(json.dumps({'dataset_id': 'd', 'corpus': {'paper_count': 0}, 'cases': [
+        {'id': 'PC-001', 'category': 'x'}, {'id': 'PC-002', 'category': 'x'}]}), encoding='utf-8')
+    evidence = tmp_path / 'evidence.json'
+    evidence.write_text('{}', encoding='utf-8')
+    class Client:
+        def __init__(self, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+    monkeypatch.setattr(run_pilot.httpx, 'Client', Client)
+    monkeypatch.setattr(run_pilot, 'api', lambda client, method, path: {'evaluation_local_only': True} if path == '/api/settings' else [])
+    attempted = []
+    def fake_run(client, case, provider, judge, evidence):
+        attempted.append(case['id'])
+        return {'id': case['id'], 'turns': [], 'judge': {}}
+    monkeypatch.setattr(run_pilot, 'run_case', fake_run)
+    monkeypatch.setenv('PAPER_EVAL_TOKEN', 'test')
+    output = tmp_path / 'out'
+    options = ['run_pilot', '--dataset', str(ds), '--evidence', str(evidence), '--output', str(output), '--no-judge']
+    monkeypatch.setattr(sys, 'argv', options + ['--resume', str(legacy)])
+    run_pilot.main()
+    assert attempted == ['PC-002']
+    report_dir = next(output.iterdir())
+    report = json.loads((report_dir / 'report.json').read_text(encoding='utf-8'))
+    assert report['metrics']['cases_attempted'] == 2
+    assert json.loads((report_dir / 'cases' / 'PC-001.json').read_text(encoding='utf-8')) == old_record
+    assert report['case_ids'] == ['PC-001', 'PC-002']
+    monkeypatch.setattr(sys, 'argv', options + ['--resume', str(report_dir)])
+    run_pilot.main()
+    assert attempted == ['PC-002']
+
+
+def test_windows_replace_retries_only_expected_errors(tmp_path, monkeypatch):
+    import corecoder.persistent as persistent
+    source, target = tmp_path / 'new', tmp_path / 'target'
+    source.write_text('new')
+    original = persistent.os.replace
+    attempts = []
+    def flaky(src, dst):
+        attempts.append(1)
+        if len(attempts) < 3:
+            exc = PermissionError('locked')
+            exc.winerror = 5
+            raise exc
+        original(src, dst)
+    monkeypatch.setattr(persistent.os, 'replace', flaky)
+    monkeypatch.setattr(persistent.time, 'sleep', lambda _: None)
+    persistent._replace_workflow_file(source, target)
+    assert len(attempts) == 3 and target.read_text() == 'new'
+    def permanent(src, dst):
+        raise PermissionError('ordinary permission failure')
+    monkeypatch.setattr(persistent.os, 'replace', permanent)
+    with pytest.raises(PermissionError):
+        persistent._replace_workflow_file(source, target)

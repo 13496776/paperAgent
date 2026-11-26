@@ -13,6 +13,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from evaluation.report_store import atomic_json, brief, case_path, legacy_report
 DEFAULT_DATASET = ROOT / 'evaluation/paperagent_pilot/pilot_dialogues.json'
 DEFAULT_EVIDENCE = ROOT / 'evaluation/paperagent_pilot/evidence_index.json'
 
@@ -198,6 +199,7 @@ def main():
     parser.add_argument('--timeout', type=float, default=900)
     parser.add_argument('--no-judge', action='store_true', help='跳过模型裁判，仅输出可从轨迹计算的指标')
     parser.add_argument('--skip-unready', action='store_true', help='跳过依赖尚未就绪论文的案例，并在报告中记录')
+    parser.add_argument('--resume', type=Path, help='从新格式报告目录或旧格式 pilot-*.json 中续跑')
     args = parser.parse_args()
     from corecoder.runtime_config import apply_runtime_config
     apply_runtime_config()
@@ -223,10 +225,45 @@ def main():
                     base_url=os.environ.get('DEEPSEEK_BASE_URL', 'https://api.deepseek.com') if args.provider == 'deepseek'
                     else os.environ.get('OPENAI_BASE_URL') or None, timeout=60, client_max_retries=0)
     args.output.mkdir(parents=True, exist_ok=True)
-    report_path = args.output / ('pilot-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8] + '.json')
-    report = {'dataset_id': dataset['dataset_id'], 'provider': args.provider, 'started_at': time.time(),
-              'judge_enabled': bool(judge), 'notes': ['代表性证据未穷举，命中率不等于真实 Recall',
-              '工具选择仅检查名称；模型裁判结果需要人工抽检', '保存对话和论文片段，请保护报告文件'], 'cases': []}
+    if args.resume and args.resume.is_dir():
+        report_dir = args.resume
+        report = json.loads((report_dir / 'report.json').read_text(encoding='utf-8'))
+    else:
+        report_dir = args.output / ('pilot-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8])
+        report_dir.mkdir()
+        (report_dir / 'cases').mkdir()
+        report = {'dataset_id': dataset['dataset_id'], 'provider': args.provider, 'started_at': time.time(),
+                  'judge_enabled': bool(judge), 'notes': ['代表性证据未穷举，命中率不等于真实 Recall',
+                  '工具选择仅检查名称；模型裁判结果需要人工抽检', '保存对话和论文片段，请保护报告文件']}
+    report_path = report_dir / 'report.json'
+    expected_meta = (dataset['dataset_id'], args.provider, bool(judge))
+    def check_meta(meta):
+        if (meta.get('dataset_id'), meta.get('provider'), meta.get('judge_enabled')) != expected_meta:
+            raise ValueError('续跑报告的数据集、模型服务或裁判设置与当前参数不一致')
+    check_meta(report)
+    if args.resume and args.resume.is_file():
+        for kind, value in legacy_report(args.resume):
+            if kind == 'metadata':
+                check_meta(value)
+                report['resumed_from'] = str(args.resume)
+                report['started_at'] = value.get('started_at', report['started_at'])
+            else:
+                path = case_path(report_dir, value['id'])
+                if path.exists():
+                    raise ValueError(f"旧报告存在重复案例: {value['id']}")
+                atomic_json(path, value)
+    (report_dir / 'cases').mkdir(exist_ok=True)
+    summaries = []
+    for path in sorted((report_dir / 'cases').glob('*.json')):
+        with path.open(encoding='utf-8') as source:
+            record = json.load(source)
+        if path != case_path(report_dir, record['id']):
+            raise ValueError(f'案例文件名和 ID 不一致: {path}')
+        summaries.append(brief(record))
+    completed_ids = {r['id'] for r in summaries}
+    if completed_ids - {c['id'] for c in dataset['cases']}:
+        raise ValueError('续跑报告包含当前数据集没有的案例')
+    print(f'报告目录：{report_dir}；已有 {len(completed_ids)} 个案例，不会自动重跑', flush=True)
     with httpx.Client(base_url=args.url, headers={'Authorization': 'Bearer ' + token}, timeout=args.timeout) as client:
         settings = api(client, 'GET', '/api/settings')
         if not settings.get('evaluation_local_only') or settings.get('shared_corpus_enabled'):
@@ -252,18 +289,24 @@ def main():
         cases = [case for case in cases if case['id'] not in unavailable]
         if not cases:
             raise RuntimeError('没有可运行的案例')
+        report['metrics'] = metrics(summaries)
+        report['case_ids'] = sorted(completed_ids)
+        atomic_json(report_path, report)
         for case in cases:
+            if case['id'] in completed_ids:
+                continue
             print(f"运行 {case['id']}：{case['category']}", flush=True)
             try:
                 record = run_case(client, case, args.provider, judge, evidence)
             except (httpx.HTTPError, ValueError, RuntimeError) as exc:
                 record = {'id': case['id'], 'category': case['category'], 'error': str(exc) or type(exc).__name__,
                           'compression_required': case.get('compression_required', False)}
-            report['cases'].append(record)
-            report['metrics'] = metrics(report['cases'])
-            temporary = report_path.with_suffix('.tmp')
-            temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-            temporary.replace(report_path)
+            atomic_json(case_path(report_dir, record['id']), record)
+            summaries.append(brief(record))
+            completed_ids.add(record['id'])
+            report['case_ids'] = sorted(completed_ids)
+            report['metrics'] = metrics(summaries)
+            atomic_json(report_path, report)
     print('测评报告：', report_path)
     print(json.dumps(report['metrics'], ensure_ascii=False, indent=2))
 

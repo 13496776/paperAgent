@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import sqlite3
 import tempfile
 import time
@@ -33,6 +34,18 @@ class JWTAuthenticator:
 SESSION_TTL_SECONDS = 24 * 60 * 60
 
 
+def _replace_workflow_file(source, target):
+    """Retry transient Windows sharing/access conflicts without weakening atomic replacement."""
+    for attempt in range(7):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as exc:
+            if getattr(exc, 'winerror', None) not in (5, 32, 33) or attempt == 6:
+                raise
+            time.sleep(random.uniform(0, min(0.05 * 2 ** attempt, 1.0)))
+
+
 class SessionStore:
     """Redis checkpoints and SQLite summaries and completed workflows.
 
@@ -52,9 +65,14 @@ class SessionStore:
                        "revision INTEGER NOT NULL, workflow TEXT NOT NULL, PRIMARY KEY (owner, session, workflow_id))")
             db.execute("CREATE INDEX IF NOT EXISTS completed_workflows_revision "
                        "ON completed_workflows (owner, session, revision DESC)")
-            archived = db.execute("SELECT owner, session, workflow FROM completed_workflows").fetchall()
-        for owner, session, workflow in archived:
-            self.save_workflow_json(owner, session, json.loads(workflow), only_if_missing=True)
+            for owner, session, workflow_id in db.execute(
+                    "SELECT owner, session, workflow_id FROM completed_workflows"):
+                if self._workflow_json_path(owner, session, workflow_id).exists():
+                    continue
+                row = db.execute("SELECT workflow FROM completed_workflows WHERE owner=? AND session=? AND workflow_id=?",
+                                 (owner, session, workflow_id)).fetchone()
+                if row:
+                    self.save_workflow_json(owner, session, json.loads(row[0]), only_if_missing=True)
 
     @staticmethod
     def _key(user, session):
@@ -100,11 +118,14 @@ class SessionStore:
                 (user, session, workflow["id"], workflow["revision"], json.dumps(workflow, ensure_ascii=False)),
             )
 
-    def save_workflow_json(self, user, session, workflow, only_if_missing=False):
-        identity = json.dumps([user, session, workflow["id"]], ensure_ascii=False).encode("utf-8")
+    def _workflow_json_path(self, user, session, workflow_id):
+        identity = json.dumps([user, session, workflow_id], ensure_ascii=False).encode("utf-8")
         filename = hashlib.sha256(identity).hexdigest() + ".json"
+        return self.results_path / filename
+
+    def save_workflow_json(self, user, session, workflow, only_if_missing=False):
         self.results_path.mkdir(mode=0o700, parents=True, exist_ok=True)
-        target = self.results_path / filename
+        target = self._workflow_json_path(user, session, workflow['id'])
         if only_if_missing and target.exists():
             return
         fd, temporary = tempfile.mkstemp(prefix=".workflow-", suffix=".tmp", dir=self.results_path)
@@ -118,7 +139,7 @@ class SessionStore:
                 except FileExistsError:
                     pass
             else:
-                os.replace(temporary, target)
+                _replace_workflow_file(temporary, target)
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
