@@ -8,9 +8,54 @@ import json
 import sys
 from pathlib import Path
 
+import ijson
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from evaluation.report_store import case_files, legacy_report
+from evaluation.report_store import case_files
+
+
+def summarize_case(path):
+    """Read only review fields, without materializing the workflow JSON tree."""
+    output = {'id': None, 'category': '', 'status': '未到达或未知',
+              'turns': 0, 'calls': 0, 'failures': 0, 'errors': [], 'question': ''}
+    call = None
+    call_prefix = 'turns.item.workflow.tasks.item.calls.item'
+    def add_error(value):
+        if value is not None and sum(map(len, output['errors'])) < 1500:
+            output['errors'].append(str(value)[:1500])
+    with Path(path).open('rb') as source:
+        for prefix, event, value in ijson.parse(source):
+            if prefix == 'id' and event == 'string':
+                output['id'] = value
+            elif prefix == 'category' and event == 'string':
+                output['category'] = value
+            elif prefix == 'target_workflow.status' and event == 'string':
+                output['status'] = value
+            elif prefix == 'turns.item' and event == 'start_map':
+                output['turns'] += 1
+            elif prefix == 'turns.item.question' and event == 'string':
+                output['question'] = value[:500]
+            elif prefix in ('error', 'turns.item.error') and event == 'string':
+                add_error(value)
+            elif prefix == call_prefix and event == 'start_map':
+                call = {'name': None, 'status': None, 'error': None, 'result': None}
+            elif call is not None and prefix == call_prefix and event == 'end_map':
+                if call['name']:
+                    output['calls'] += 1
+                    if call['status'] == 'failed':
+                        output['failures'] += 1
+                        add_error(call['error'] or call['result'])
+                call = None
+            elif call is not None and prefix in {call_prefix + '.name', call_prefix + '.status',
+                                                   call_prefix + '.error', call_prefix + '.result'}:
+                if event in ('string', 'number', 'boolean'):
+                    call[prefix.rsplit('.', 1)[-1]] = str(value)[:1500]
+            elif call is not None and prefix == call_prefix + '.result.error' and event == 'string':
+                call['result'] = value[:1500]
+    if not output['id']:
+        raise ValueError(f'案例文件缺少 ID: {path}')
+    return output
 
 
 def make_review(directory, legacy=None):
@@ -22,17 +67,17 @@ def make_review(directory, legacy=None):
             legacy = candidate
     imported = set()
     if legacy is not None:
-        for kind, value in legacy_report(legacy):
-            if kind == 'metadata':
-                if value.get('dataset_id') != meta.get('dataset_id'):
-                    raise ValueError('旧报告和目标报告的数据集不匹配')
-            else:
-                imported.add(value['id'])
+        with Path(legacy).open('rb') as source:
+            legacy_ids = set(ijson.items(source, 'cases.item.id'))
+        with Path(legacy).open('rb') as source:
+            legacy_dataset = next(ijson.items(source, 'dataset_id'), None)
+        if legacy_dataset != meta.get('dataset_id'):
+            raise ValueError('旧报告和目标报告的数据集不匹配')
+        imported = legacy_ids
     rows = []
     seen = set()
     for path in case_files(directory):
-        with path.open(encoding='utf-8') as source:
-            record = json.load(source)
+        record = summarize_case(path)
         ident = record['id']
         if ident in seen:
             raise ValueError(f'案例 {ident} 有多个结果文件，请人工检查')
@@ -44,21 +89,11 @@ def make_review(directory, legacy=None):
             origin = '旧报告导入' if ident in imported else '旧版续跑新增（具体批次未知）'
         else:
             origin = '旧版混合记录（来源未知）'
-        turns = record.get('turns', [])
-        calls = [call for turn in turns for task in (turn.get('workflow') or {}).get('tasks', [])
-                 for call in task.get('calls', []) if call.get('name')]
-        failures = [c for c in calls if c.get('status') == 'failed']
-        errors = [str(c.get('error') or c.get('result') or '') for c in failures]
-        errors += [str(t.get('error')) for t in turns if t.get('error')]
-        if record.get('error'):
-            errors.append(str(record['error']))
-        target = record.get('target_workflow') or {}
-        rows.append({'案例ID': ident, '类别': record.get('category', ''), '来源批次': origin,
-                     '目标轮状态': target.get('status', '未到达或未知'),
-                     '已执行轮数': len(turns), '工具调用数': len(calls), '工具失败数': len(failures),
-                     '失败摘要': ' | '.join(errors)[:1500],
-                     '最后用户问题': str(turns[-1].get('question', ''))[:500] if turns else '',
-                     '结果文件': relative.as_posix()})
+        rows.append({'案例ID': ident, '类别': record['category'], '来源批次': origin,
+                     '目标轮状态': record['status'], '已执行轮数': record['turns'],
+                     '工具调用数': record['calls'], '工具失败数': record['failures'],
+                     '失败摘要': ' | '.join(record['errors'])[:1500],
+                     '最后用户问题': record['question'], '结果文件': relative.as_posix()})
     rows.sort(key=lambda x: x['案例ID'])
     csv_path = directory / 'review.csv'
     fields = ['案例ID', '类别', '来源批次', '目标轮状态', '已执行轮数', '工具调用数', '工具失败数', '失败摘要', '最后用户问题', '结果文件']

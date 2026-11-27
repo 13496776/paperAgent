@@ -266,6 +266,7 @@ def main():
                 if path.exists():
                     raise ValueError(f"旧报告存在重复案例: {value['id']}")
                 atomic_json(path, value)
+                del value
     (report_dir / 'cases').mkdir(exist_ok=True)
     summaries = []
     found_ids = set()
@@ -278,6 +279,7 @@ def main():
             raise ValueError(f"同一案例存在多个结果文件，请先人工检查: {record['id']}")
         found_ids.add(record['id'])
         summaries.append(brief(record))
+        del record
     completed_ids = {r['id'] for r in summaries}
     if completed_ids - {c['id'] for c in dataset['cases']}:
         raise ValueError('续跑报告包含当前数据集没有的案例')
@@ -338,14 +340,15 @@ def main():
             report['case_ids'] = sorted(completed_ids)
             report['metrics'] = metrics(summaries)
             atomic_json(report_path, report)
+            del record
     print('测评报告：', report_path)
     print(json.dumps(report['metrics'], ensure_ascii=False, indent=2))
     try:
         from evaluation.review_report import make_review
         count, csv_path, html_path = make_review(report_dir)
         print(f'已为 {count} 个案例生成审阅索引：{html_path}；表格：{csv_path}')
-    except (OSError, ValueError) as exc:
-        print(f'生成审阅索引失败，可稍后运行 review_report.py：{exc}', file=sys.stderr)
+    except (OSError, ValueError, MemoryError, ImportError) as exc:
+        print(f'生成审阅索引失败，原始案例和 report.json 已保存；可稍后运行 review_report.py：{exc or type(exc).__name__}', file=sys.stderr)
 
 
 if __name__ == '__main__':

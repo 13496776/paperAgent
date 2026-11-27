@@ -247,3 +247,30 @@ def test_structured_retrieval_results_are_included_in_evaluation_hits():
     result = {'hits': [{'id': 'chunk-1', 'text': 'evidence'}], 'coverage': {'pending_count': 2}}
     calls = [{'name': 'retrieve_chunks', 'status': 'completed', 'result': result}]
     assert returned_chunks(calls) == result['hits']
+
+
+def test_review_streams_large_cases_without_json_load(tmp_path, monkeypatch):
+    import csv
+
+    from evaluation import review_report
+    from evaluation.report_store import atomic_json
+    root = tmp_path / 'report'
+    cases = root / 'runs' / 'run-1' / 'cases'
+    cases.mkdir(parents=True)
+    atomic_json(root / 'report.json', {'dataset_id': 'd'})
+    record = {'id': 'F100-001', 'category': '混合检索', 'turns': [
+        {'question': '请检索这篇论文', 'status': 'completed', 'workflow': {'tasks': [
+            {'calls': [{'name': 'retrieve_chunks', 'status': 'failed', 'error': '检索超时',
+                        'result': {'large_irrelevant_result': 'a' * (8 * 1024 * 1024)}}]}]}}],
+        'target_workflow': {'status': 'completed'}}
+    atomic_json(cases / 'F100-001.json', record)
+    del record
+    monkeypatch.setattr(review_report.json, 'load', lambda *args, **kwargs: pytest.fail('case must be streamed'))
+    count, csv_path, html_path = review_report.make_review(root)
+    assert count == 1 and html_path.exists()
+    with csv_path.open(encoding='utf-8-sig', newline='') as source:
+        row = next(csv.DictReader(source))
+    assert row['案例ID'] == 'F100-001'
+    assert row['工具调用数'] == '1' and row['工具失败数'] == '1'
+    assert row['失败摘要'] == '检索超时'
+    assert row['来源批次'] == 'run-1'
