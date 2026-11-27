@@ -74,6 +74,7 @@ def test_arxiv_feed_metadata():
 
 def test_arxiv_metadata_timeout_is_configurable(monkeypatch, unpaced_arxiv):
     import httpx
+
     from corecoder.papers.ingestion import get_arxiv_paper, search_arxiv
 
     monkeypatch.setenv("PAPER_ARXIV_API_TIMEOUT", "45")
@@ -272,6 +273,7 @@ def test_search_wait_does_not_block_other_arxiv_requests(tmp_path, monkeypatch):
 
 def test_arxiv_pagination_and_legacy_identifiers(unpaced_arxiv):
     import httpx
+
     from corecoder.papers.ingestion import search_arxiv
     feed = b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/solv-int/9901001v2</id>
     <title>Old paper</title><author><name>A</name></author></entry></feed>'''
@@ -350,6 +352,7 @@ def test_arxiv_import_with_mocked_remote(tmp_path, unpaced_arxiv):
 
 def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch, unpaced_arxiv):
     import httpx
+
     from corecoder.papers import ingestion
 
     waits = []
@@ -368,14 +371,14 @@ def test_arxiv_retry_respects_retry_after_and_does_not_retry_404(monkeypatch, un
     def missing(request):
         count.append(1)
         return httpx.Response(404)
-    with httpx.Client(transport=httpx.MockTransport(missing)) as client:
-        with pytest.raises(httpx.HTTPStatusError):
-            ingestion.download_arxiv("2401.12345", client)
+    with httpx.Client(transport=httpx.MockTransport(missing)) as client, pytest.raises(httpx.HTTPStatusError):
+        ingestion.download_arxiv("2401.12345", client)
     assert len(count) == 1
 
 
 def test_arxiv_retry_after_timeout(monkeypatch, unpaced_arxiv):
     import httpx
+
     from corecoder.papers import ingestion
 
     waits, attempts = [], []

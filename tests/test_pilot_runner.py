@@ -83,6 +83,7 @@ def test_evaluation_mode_disables_external_tools(monkeypatch):
 
 def test_streamed_report_resume_imports_legacy_and_preserves_metrics(tmp_path, monkeypatch, capsys):
     import sys
+
     from evaluation import run_pilot
     from evaluation.report_store import brief
 
@@ -131,6 +132,7 @@ def test_streamed_report_resume_imports_legacy_and_preserves_metrics(tmp_path, m
 
 def test_resume_sparse_ids_keeps_old_results_and_separates_new_run(tmp_path, monkeypatch):
     import sys
+
     from evaluation import run_pilot
     from evaluation.report_store import atomic_json
     from evaluation.review_report import make_review
@@ -172,7 +174,7 @@ def test_resume_sparse_ids_keeps_old_results_and_separates_new_run(tmp_path, mon
 
 
 def test_windows_replace_retries_only_expected_errors(tmp_path, monkeypatch):
-    import corecoder.persistent as persistent
+    from corecoder import persistent
     source, target = tmp_path / 'new', tmp_path / 'target'
     source.write_text('new')
     original = persistent.os.replace
@@ -197,6 +199,7 @@ def test_windows_replace_retries_only_expected_errors(tmp_path, monkeypatch):
 
 def test_legacy_resume_with_first_163_does_not_replay_them(tmp_path, monkeypatch, capsys):
     import sys
+
     from evaluation import run_pilot
     records = [{'id': f'PC-{i:03}', 'category': 'test', 'turns': [], 'judge': {}} for i in range(1, 164)]
     old = tmp_path / 'old.json'
@@ -227,3 +230,13 @@ def test_legacy_resume_with_first_163_does_not_replay_them(tmp_path, monkeypatch
     assert '已有 163 个案例' in output
     assert '运行 PC-164' in output
     assert '运行 PC-001' not in output
+
+
+def test_api_reports_http_status_and_bounded_response_detail():
+    import httpx
+
+    from evaluation.run_pilot import api
+    transport = httpx.MockTransport(lambda request: httpx.Response(400, json={'detail': 'dependencies must be a list of task IDs'}))
+    with httpx.Client(base_url='http://test', transport=transport) as client, pytest.raises(
+            RuntimeError, match='HTTP 400.*dependencies must be a list'):
+        api(client, 'POST', '/plan', {})

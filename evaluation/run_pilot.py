@@ -14,6 +14,7 @@ import httpx
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from evaluation.report_store import atomic_json, brief, case_files, case_path, legacy_report
+from corecoder.workflow.validation import check
 DEFAULT_DATASET = ROOT / 'evaluation/paperagent_pilot/pilot_dialogues.json'
 DEFAULT_EVIDENCE = ROOT / 'evaluation/paperagent_pilot/evidence_index.json'
 
@@ -132,6 +133,11 @@ def judge_case(llm, case, record, evidence):
         if text.startswith('```'):
             text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
         result = json.loads(text)
+        fields = {'criteria': case['success_criteria'], 'memory_checks': case.get('memory_checks', [])}
+        check({'type': 'object', 'required': ['criteria', 'memory_checks'], 'properties': {
+            name: {'type': 'array', 'minItems': len(values), 'maxItems': len(values),
+                   'items': {'type': ['boolean', 'null']}} for name, values in fields.items()}},
+              result, 'judge result')
         for name, target in [('criteria', case['success_criteria']), ('memory_checks', case.get('memory_checks', []))]:
             values = result[name]
             if not isinstance(values, list) or len(values) != len(target) or any(v is not None and type(v) is not bool for v in values):
@@ -146,7 +152,13 @@ def judge_case(llm, case, record, evidence):
 
 def api(client, method, path, payload=None):
     response = client.request(method, path, json=payload)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # Preserve the server's diagnostic detail (often omitted from the
+        # exception string), but do not automatically retry a POST.
+        detail = response.text[:1500].strip()
+        raise RuntimeError(f'HTTP {response.status_code} {method} {path}：{detail or "无响应详情"}') from exc
     return response.json()
 
 

@@ -3,6 +3,7 @@ import json
 import math
 import os
 import queue
+import random
 import re
 import threading
 import time
@@ -12,6 +13,7 @@ import weakref
 import httpx
 
 from corecoder.papers.evaluation import evaluate
+from corecoder.workflow.validation import PLAN, ContractError, check, model_response, tool_result
 
 WORKERS = {
     "ingestion": "解析、清洗、切分和索引论文数据",
@@ -165,6 +167,20 @@ class ResearchTools:
         return []
 
     def execute(self, worker, name, args, progress=None, *, verified_paper=None):
+        schemas = self.schemas(worker)
+        # The underlying executor also supports explicit legacy search calls when
+        # both providers are available, even though the model sees search_online.
+        if worker == 'retrieval':
+            schemas += ResearchTools(online_search=self.online_search).schemas(worker)
+            schemas += ResearchTools(paperlist_search=self.paperlist_search).schemas(worker)
+        schema = next((s['function']['parameters'] for s in schemas if s['function']['name'] == name), None)
+        if schema is None:
+            raise ValueError(f'tool {name} is not allowed for {worker}')
+        check(schema, args, f'tool {name} arguments')
+        result = self._execute(worker, name, args, progress, verified_paper=verified_paper)
+        return tool_result(name, result)
+
+    def _execute(self, worker, name, args, progress=None, *, verified_paper=None):
         allowed = {schema["function"]["name"] for schema in self.schemas(worker)}
         if worker == "retrieval":
             if self.online_search:
@@ -242,20 +258,30 @@ class ResearchTools:
             raise ValueError("PAPER_RETRIEVAL_TIMEOUT must be positive and finite")
         key = (os.environ.get("CORECODER_SQLITE_PATH", "corecoder-memory.sqlite3"),
                getattr(self.retriever, "user", id(self.retriever)))
+        wait = float(os.environ.get('PAPER_RETRIEVAL_LOCK_WAIT', '1'))
+        if not math.isfinite(wait) or wait < 0:
+            raise ValueError('PAPER_RETRIEVAL_LOCK_WAIT must be nonnegative and finite')
         with _retrieval_locks_guard:
             lock = _retrieval_locks.get(key)
             if lock is None:
                 lock = threading.Lock()
                 _retrieval_locks[key] = lock
-            if not lock.acquire(blocking=False):
-                raise RuntimeError("此前的检索仍在后台运行，请等待其结束后再试")
+        if not lock.acquire(timeout=min(wait, timeout)):
+            raise RuntimeError('此前的检索仍在后台运行；已等待锁超时，请稍后重试；如长时间不结束请重启后端')
 
         events = queue.Queue()
+        cancelled = threading.Event()
+
+        def report_progress(stage, detail):
+            if cancelled.is_set():
+                raise TimeoutError('检索超时，已在安全检查点取消')
+            if progress:
+                events.put(('progress', (stage, detail)))
 
         def run():
             try:
-                if progress and hasattr(self.retriever, "retrieve_with_progress"):
-                    result = self.retriever.retrieve_with_progress(query, lambda stage, detail: events.put(("progress", (stage, detail))))
+                if hasattr(self.retriever, "retrieve_with_progress"):
+                    result = self.retriever.retrieve_with_progress(query, report_progress)
                 else:
                     result = self.retriever.retrieve(query)
                 outcome = ("result", result)
@@ -275,11 +301,13 @@ class ResearchTools:
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；检索可能仍在后台运行，请勿立即重试")
+                cancelled.set()
+                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；已请求在安全检查点取消，底层调用可能仍在后台运行，请勿立即重试")
             try:
                 kind, value = events.get(timeout=remaining)
             except queue.Empty as exc:
-                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；检索可能仍在后台运行，请勿立即重试") from exc
+                cancelled.set()
+                raise TimeoutError(f"retrieve_chunks 超过 {timeout:g} 秒；已请求在安全检查点取消，底层调用可能仍在后台运行，请勿立即重试") from exc
             if kind == "progress":
                 progress(*value)
             elif kind == "error":
@@ -440,17 +468,19 @@ class Supervisor:
                     {"role": "user", "content": json.dumps({"question": question, "summary": summary, "history": history[-10:]},
                                                               ensure_ascii=False)},
                 ]
-                for attempt in range(2):
+                for attempt in range(3):
                     response = self.llm.chat(messages=planning_messages)
                     if self._apply_control(user, session, workflow, save):
                         return workflow
                     try:
-                        workflow["tasks"] = validate_plan(parse_json(response.content))
+                        model_response(response, tools=[], allow_calls=False)
+                        plan = check(PLAN, parse_json(response.content), 'plan')
+                        workflow["tasks"] = validate_plan(plan)
                         break
                     except (ValueError, TypeError, KeyError) as exc:
-                        if attempt:
+                        if attempt == 2:
                             raise
-                        planning_messages.extend([{"role": "assistant", "content": response.content},
+                        planning_messages.extend([{"role": "assistant", "content": str(getattr(response, 'content', ''))[:12000]},
                                                   {"role": "user", "content": "Fix the plan JSON: " + error_message(exc)}])
                 workflow["status"] = "awaiting_approval"
             except Exception as exc:
@@ -682,7 +712,19 @@ class Supervisor:
                             workflow["budget_exhausted"] = True
                             messages.append({"role": "system", "content": "The tool budget is exhausted. No more tools are available for this task. Summarize the evidence obtained and explicitly state any limitations or missing evidence."})
                             save()
-                        response = self.llm.chat(messages=messages, tools=[] if task.get("budget_exhausted") else self.tools.schemas(task["worker"]))
+                        available = [] if task.get('budget_exhausted') else self.tools.schemas(task['worker'])
+                        for attempt in range(2):
+                            response = self.llm.chat(messages=messages, tools=available)
+                            try:
+                                if task.get('budget_exhausted') and getattr(response, 'tool_calls', None):
+                                    model_response(response)
+                                    raise RuntimeError('模型在工具预算用尽后仍尝试调用工具，无法生成部分结果')
+                                model_response(response, tools=available)
+                                break
+                            except ContractError as exc:
+                                if attempt:
+                                    raise
+                                messages.append({'role': 'system', 'content': '上一条模型响应不符合工具或响应格式，请修正后重试：' + error_message(exc)})
                         messages.append(response.message)
                         if not response.tool_calls:
                             result = response.content
@@ -710,19 +752,34 @@ class Supervisor:
                                 if call.name == "import_paperlist":
                                     verified_paper = self._validate_paperlist_import(user, session, workflow, call.arguments.get("id"))
                                 if call.name == "list_paperlist_search_results":
-                                    if call.name not in {schema["function"]["name"] for schema in self.tools.schemas(task["worker"])}:
+                                    available_schemas = {schema['function']['name']: schema['function']['parameters'] for schema in self.tools.schemas(task['worker'])}
+                                    if call.name not in available_schemas:
                                         raise ValueError("tool is not allowed for this worker")
+                                    check(available_schemas[call.name], call.arguments, 'tool arguments')
                                     result = self._previous_paperlist_results(user, session, call.arguments)
+                                    tool_result(call.name, result)
                                 else:
                                     kwargs = {"progress": lambda stage, detail, current=task: self._start_activity(current, stage, detail, save)}
                                     if call.name == "import_paperlist":
                                         kwargs["verified_paper"] = verified_paper
-                                    result = self.tools.execute(task["worker"], call.name, call.arguments, **kwargs)
+                                    for attempt in range(2):
+                                        try:
+                                            result = self.tools.execute(task["worker"], call.name, call.arguments, **kwargs)
+                                            break
+                                        except ContractError:
+                                            # Never repeat a write: it may already have succeeded.
+                                            if attempt or call.name in ('import_arxiv', 'import_paperlist'):
+                                                raise
+                                            event['schema_retries'] = 1
+                                            time.sleep(random.uniform(0.05, 0.15))
                                 event.update(status="completed", result=result)
                             except Exception as exc:  # noqa: BLE001
                                 self._finish_activity(task, "failed")
-                                event.update(status="failed", error=error_message(exc))
-                                result = {"error": error_message(exc)}
+                                error = error_message(exc)
+                                if isinstance(exc, ContractError) and call.name in ('import_arxiv', 'import_paperlist'):
+                                    error += '；写入可能已经发生，请核对结果后再决定是否重试'
+                                event.update(status="failed", error=error)
+                                result = {"error": error}
                             save()
                             messages.append({"role": "tool", "tool_call_id": call.id,
                                              "content": json.dumps(result, ensure_ascii=False)})
@@ -752,6 +809,7 @@ class Supervisor:
                             {"role": "user", "content": json.dumps({"previous_summary": prior, "messages": history[:-8]},
                                                                       ensure_ascii=False)},
                         ])
+                        model_response(response, tools=[], allow_calls=False)
                         if response.content:
                             state["summary_id"] = self.store.archive(user, session, response.content)
                             del history[:-8]

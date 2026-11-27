@@ -31,6 +31,7 @@ classifiers = [
 dependencies = [
     "filelock>=3.12",
     "openai>=1.0",
+    "jsonschema>=4.18,<5",
     "rich>=13.0",
     "prompt_toolkit>=3.0",
     "python-dotenv>=1.0",

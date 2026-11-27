@@ -147,7 +147,8 @@ def test_tool_budgets_are_workflow_wide_and_survive_resume(tmp_path):
 def test_total_tool_budget_and_final_model_decision(tmp_path):
     class Tools:
         def schemas(self, worker):
-            return []
+            return [{'type': 'function', 'function': {'name': f'tool{i}', 'parameters': {'type': 'object'}}}
+                    for i in range(2)]
         def execute(self, worker, name, args, progress=None):
             return "ok"
 
@@ -275,7 +276,7 @@ def test_retrieval_timeout_records_failure_and_blocks_overlapping_retry(tmp_path
             entered.set()
             assert release.wait(5)
             progress("late", "超时后的进度")
-            return [{"text": "late"}]
+            return [{"id": "late", "text": "late"}]
 
     monkeypatch.setenv("CORECODER_SQLITE_PATH", str(tmp_path / "memory.sqlite"))
     monkeypatch.setenv("PAPER_RETRIEVAL_TIMEOUT", "0.05")
@@ -300,7 +301,7 @@ def test_retrieval_timeout_records_failure_and_blocks_overlapping_retry(tmp_path
     deadline = time.monotonic() + 2
     while threading.active_count() and time.monotonic() < deadline:
         try:
-            assert tools.execute("retrieval", "retrieve_chunks", {"query": "after"}, progress=lambda *_: None) == [{"text": "late"}]
+            assert tools.execute("retrieval", "retrieve_chunks", {"query": "after"}, progress=lambda *_: None) == [{"id": "late", "text": "late"}]
             break
         except RuntimeError as exc:
             if "后台运行" not in str(exc):
@@ -492,3 +493,112 @@ def test_inventory_tool_routes_exact_count_without_embedding(tmp_path):
     assert result["tasks"][0]["calls"][0]["result"]["count"] == 3
     assert result["result"] == "当前有 3 篇论文"
     assert all(activity["duration_ms"] >= 0 for activity in result["tasks"][0]["activities"])
+
+
+def test_plan_schema_repairs_invalid_dependency_before_persist(tmp_path):
+    bad = {'tasks': [{'id': 'a', 'worker': 'analysis', 'goal': 'answer', 'depends_on': 'none'}]}
+    good = {'tasks': [{'id': 'a', 'worker': 'analysis', 'goal': 'answer', 'depends_on': []}]}
+    store = SessionStore(fakeredis.FakeRedis(), tmp_path / 'db.sqlite')
+    supervisor = Supervisor(Scripted([LLMResponse(content=json.dumps(bad)), LLMResponse(content=json.dumps(good))]), store)
+    workflow = supervisor.start('u', 's', 'question')
+    assert workflow['tasks'][0]['depends_on'] == []
+    assert workflow['status'] == 'awaiting_approval'
+
+
+def test_invalid_tool_arguments_repaired_before_execution(tmp_path):
+    calls = []
+    class CountRetriever:
+        def retrieve(self, query):
+            calls.append(query)
+            return [{'id': 'v', 'text': 'valid'}]
+    plan = {'tasks': [{'id': 'r', 'worker': 'retrieval', 'goal': 'find', 'depends_on': []}]}
+    replies = [LLMResponse(content=json.dumps(plan)),
+               LLMResponse(tool_calls=[ToolCall('bad', 'retrieve_chunks', {'query': 42})]),
+               LLMResponse(tool_calls=[ToolCall('good', 'retrieve_chunks', {'query': 'right'})]),
+               LLMResponse(content='done')]
+    supervisor = Supervisor(Scripted(replies), SessionStore(fakeredis.FakeRedis(), tmp_path / 'db.sqlite'), ResearchTools(CountRetriever()))
+    supervisor.start('u', 's', 'q')
+    workflow = supervisor.resume('u', 's')
+    assert calls == ['right']
+    assert [call['id'] for call in workflow['tasks'][0]['calls']] == ['good']
+    assert not any(msg.get('tool_calls', [{}])[0].get('id') == 'bad' for msg in workflow['tasks'][0]['messages'] if msg.get('tool_calls'))
+
+
+def test_invalid_retrieval_result_retried_before_state(tmp_path, monkeypatch):
+    monkeypatch.setattr('corecoder.workflow.engine.time.sleep', lambda _: None)
+    class Retriever:
+        def __init__(self): self.calls = 0
+        def retrieve(self, query):
+            self.calls += 1
+            return {'invalid': True} if self.calls == 1 else [{'id': 'v', 'text': 'valid'}]
+    retriever = Retriever()
+    plan = {'tasks': [{'id': 'r', 'worker': 'retrieval', 'goal': 'find', 'depends_on': []}]}
+    responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=[ToolCall('c', 'retrieve_chunks', {'query': 'q'})]), LLMResponse(content='done')]
+    supervisor = Supervisor(Scripted(responses), SessionStore(fakeredis.FakeRedis(), tmp_path / 'db.sqlite'), ResearchTools(retriever))
+    supervisor.start('u', 's', 'q')
+    event = supervisor.resume('u', 's')['tasks'][0]['calls'][0]
+    assert retriever.calls == 2 and event['schema_retries'] == 1
+    assert event['result'] == [{'id': 'v', 'text': 'valid'}] and event['status'] == 'completed'
+
+
+def test_invalid_import_result_never_replays_write(tmp_path):
+    writes = []
+    def do_import(ident):
+        writes.append(ident)
+        return ['not a valid import receipt']
+    plan = {'tasks': [{'id': 'i', 'worker': 'ingestion', 'goal': 'import', 'depends_on': []}]}
+    responses = [LLMResponse(content=json.dumps(plan)), LLMResponse(tool_calls=[ToolCall('c', 'import_arxiv', {'id': '2401.00001'})]), LLMResponse(content='failed')]
+    supervisor = Supervisor(Scripted(responses), SessionStore(fakeredis.FakeRedis(), tmp_path / 'db.sqlite'), ResearchTools(online_import=do_import))
+    supervisor.start('u', 's', 'import')
+    event = supervisor.resume('u', 's')['tasks'][0]['calls'][0]
+    assert writes == ['2401.00001']
+    assert event['status'] == 'failed' and '可能已经发生' in event['error']
+
+
+def test_timed_out_retrieval_cancels_at_next_checkpoint(tmp_path, monkeypatch):
+    import threading
+    started = threading.Event()
+    unblock = threading.Event()
+    finished = threading.Event()
+    class Slow:
+        user = 'timeout-cancel'
+        def retrieve_with_progress(self, query, progress):
+            started.set()
+            unblock.wait(3)
+            try:
+                progress('next', 'safe point')
+                raise AssertionError('cancelled retrieval should not proceed')
+            finally:
+                finished.set()
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'db.sqlite'))
+    monkeypatch.setenv('PAPER_RETRIEVAL_TIMEOUT', '0.03')
+    monkeypatch.setenv('PAPER_RETRIEVAL_LOCK_WAIT', '0')
+    tools = ResearchTools(Slow())
+    try:
+        with pytest.raises(TimeoutError, match='安全检查点'):
+            tools.execute('retrieval', 'retrieve_chunks', {'query': 'q'})
+        assert started.is_set()
+        with pytest.raises(RuntimeError, match='后台运行'):
+            tools.execute('retrieval', 'retrieve_chunks', {'query': 'q2'})
+    finally:
+        unblock.set()
+    assert finished.wait(2)
+
+
+def test_llm_retries_malformed_tool_json_without_executing(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from corecoder.llm import LLM
+    def chunk(arguments):
+        call = SimpleNamespace(index=0, id='c', function=SimpleNamespace(name='retrieve_chunks', arguments=arguments))
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(
+            content=None, tool_calls=[call], reasoning_content=None))])
+    llm = LLM(model='test', api_key='test')
+    llm.client = Mock()
+    llm.client.chat.completions.create.side_effect = [[chunk('{oops')], [chunk('{"query":"ok"}')]]
+    monkeypatch.setattr('corecoder.llm.time.sleep', lambda _: None)
+    schema = ResearchTools(Retriever()).schemas('retrieval')
+    response = llm.chat(messages=[{'role': 'user', 'content': 'search'}], tools=schema)
+    assert response.tool_calls[0].arguments == {'query': 'ok'}
+    assert llm.client.chat.completions.create.call_count == 2

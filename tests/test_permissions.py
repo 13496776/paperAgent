@@ -189,6 +189,7 @@ def test_yes_flag_parses(monkeypatch):
 
 def test_generic_single_agent_cli_is_disabled(monkeypatch):
     import pytest
+
     from corecoder.cli import main
     monkeypatch.setattr("sys.argv", ["corecoder", "--yes"])
     with pytest.raises(SystemExit, match="单 Agent 入口已停用"):

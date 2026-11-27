@@ -22,6 +22,7 @@ FIELDS = {
     "retrieval_limit": "PAPER_RETRIEVAL_LIMIT",
     "retrieval_candidates": "PAPER_RETRIEVAL_CANDIDATES",
     "retrieval_timeout_seconds": "PAPER_RETRIEVAL_TIMEOUT",
+    "retrieval_lock_wait_seconds": "PAPER_RETRIEVAL_LOCK_WAIT",
     "llm_timeout_seconds": "PAPER_LLM_TIMEOUT",
     "arxiv_search_interval_seconds": "PAPER_ARXIV_SEARCH_INTERVAL",
     "arxiv_api_timeout_seconds": "PAPER_ARXIV_API_TIMEOUT",

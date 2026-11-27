@@ -18,6 +18,8 @@ from pathlib import Path
 
 from openai import APIConnectionError, APIError, APITimeoutError, BadRequestError, OpenAI, RateLimitError
 
+from corecoder.workflow.validation import ContractError, model_response
+
 
 @dataclass
 class ToolCall:
@@ -197,7 +199,9 @@ class LLM:
                         raise
                     params.pop("stream_options")
             try:
-                return self._drain(stream, on_token, on_reasoning)
+                return model_response(self._drain(stream, on_token, on_reasoning), tools=tools)
+            except ContractError as e:
+                last_err = e
             except (RateLimitError, APITimeoutError, APIConnectionError) as e:
                 last_err = e
             except APIError as e:
@@ -275,8 +279,8 @@ class LLM:
             raw = tc_map[idx]
             try:
                 args = json.loads(raw["args"])
-            except (json.JSONDecodeError, KeyError):
-                args = {}
+            except (json.JSONDecodeError, KeyError) as exc:
+                raise ContractError('LLM tool call arguments are invalid JSON') from exc
             parsed.append(ToolCall(id=raw["id"], name=raw["name"], arguments=args))
 
         with self._usage_lock:

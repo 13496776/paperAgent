@@ -20,6 +20,7 @@ from .tools import ALL_TOOLS
 from .tools.agent import AgentTool
 from .tools.base import Tool
 from .tools.todo import TodoWriteTool
+from .workflow.validation import check
 
 
 class Agent:
@@ -163,7 +164,8 @@ class Agent:
             return f"Error: bad arguments for {tc.name}: {e}"
         # a tool that blows up gets reported back as text, never kills the loop
         try:
-            return tool.execute(**tc.arguments)
+            check(tool.parameters, tc.arguments, f'tool {tc.name} arguments')
+            return check({'type': 'string'}, tool.execute(**tc.arguments), f'tool {tc.name} result')
         except Exception as e:  # noqa: BLE001
             return f"Error executing {tc.name}: {e}"
 

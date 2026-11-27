@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/he-yufeng/CoreCoder/actions/workflows/ci.yml/badge.svg)](https://github.com/he-yufeng/CoreCoder/actions)
-[![engine](https://img.shields.io/badge/engine-1531_LoC-blue)](article/)
+[![engine](https://img.shields.io/badge/engine-1536_LoC-blue)](article/)
 [![源码导读](https://img.shields.io/badge/源码导读-8篇双语-orange)](article/)
 
 </div>
@@ -36,7 +36,7 @@ nanoGPT 那一列是拿来对照的：它最小、可读，但教的是训一个
 
 我一直觉得 coding agent 被讲得太玄了。把 Claude Code、Cursor 这类工具扒到底，核心是一个 while 循环套着一个大模型，外加七八个让它能真正动手的工具。难的从来不是这个循环，而是循环跑进真实世界以后要兜的那些底。CoreCoder 就是把这个核心老老实实写出来的最小版本。
 
-引擎部分（循环、模型接口、上下文、工具、会话）去掉空行和注释是 1531 行。连最外层的 CLI、配置、打包一起算，整个包 38 个文件、物理 5320 行、净 4522 行，每个文件都短到能一口气读完。自 1161 行快照之后的增长都花在了看得见的功能上：plan mode、hooks、checkpoints，下文各有交代。
+引擎部分（循环、模型接口、上下文、工具、会话）去掉空行和注释是 1531 行。连最外层的 CLI、配置、打包一起算，整个包 40 个文件、物理 6193 行、净 5321 行，每个文件都短到能一口气读完。自 1161 行快照之后的增长都花在了看得见的功能上：plan mode、hooks、checkpoints，下文各有交代。
 
 它真能跑：读写文件、执行 shell、派子 agent、分三层压上下文，还能随时把这趟烧掉的 token 和美元数报给你。任何要动你磁盘、要跑命令的调用，都会先停下来等你点头。现在有 363 个离线测试，另有按需开启的真实 API 冒烟。但能跑不是为了劝你拿去日用，而是为了让这份「注释」不撒谎：一个解释 agent 怎么运作的范例，自己得真能运作。
 
@@ -192,7 +192,7 @@ worker 名不能重复，依赖必须指向已有名字，循环依赖会在任�
 
 读懂之后，最自然的下一步就是 fork。起手不用伤筋动骨：
 
-- **换个你常用的模型。** 就是上面那两个环境变量，`llm.py`（367 行）是所有 provider 适配的入口。
+- **换个你常用的模型。** 就是上面那两个环境变量，`llm.py`（371 行）是所有 provider 适配的入口。
 - **加一件你自己的工具。** 照 `tools/base.py`（32 行）的工具基类写个新文件，跑测试、抓网页、调 LSP 都行，第二篇文章末尾手把手带你写第一个。
 - **改系统提示词。** `prompt.py` 才 41 行，改一句就能看到 agent 的脾气变了，是门槛最低的「改一处就有反馈」。
 - **直接当库 import。** 顶层导出了 `Agent`、`LLM`、`Config`，能嵌进你自己的程序：
