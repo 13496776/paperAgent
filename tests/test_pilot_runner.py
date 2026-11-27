@@ -240,3 +240,10 @@ def test_api_reports_http_status_and_bounded_response_detail():
     with httpx.Client(base_url='http://test', transport=transport) as client, pytest.raises(
             RuntimeError, match='HTTP 400.*dependencies must be a list'):
         api(client, 'POST', '/plan', {})
+
+
+def test_structured_retrieval_results_are_included_in_evaluation_hits():
+    from evaluation.run_pilot import returned_chunks
+    result = {'hits': [{'id': 'chunk-1', 'text': 'evidence'}], 'coverage': {'pending_count': 2}}
+    calls = [{'name': 'retrieve_chunks', 'status': 'completed', 'result': result}]
+    assert returned_chunks(calls) == result['hits']

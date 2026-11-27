@@ -38,7 +38,11 @@ MODEL = {'type': 'object', 'required': ['content', 'tool_calls', 'prompt_tokens'
                        'arguments': {'type': 'object'}}}}}}
 
 RESULTS = {
-    'retrieve_chunks': {'type': 'array', 'items': {'type': 'object', 'required': ['id', 'text'], 'properties': {'id': {'type': 'string', 'minLength': 1}, 'text': {'type': 'string'}}}},
+    'retrieve_chunks': {'anyOf': [
+        {'type': 'array', 'items': {'type': 'object', 'required': ['id', 'text'], 'properties': {'id': {'type': 'string', 'minLength': 1}, 'text': {'type': 'string'}}}},
+        {'type': 'object', 'required': ['hits', 'coverage'], 'properties': {
+            'hits': {'type': 'array', 'items': {'type': 'object', 'required': ['id', 'text'], 'properties': {'id': {'type': 'string', 'minLength': 1}, 'text': {'type': 'string'}}}},
+            'coverage': {'type': 'object', 'required': ['pending_count', 'metadata_only_count', 'warnings'], 'properties': {'pending_count': {'type': 'integer', 'minimum': 0}, 'metadata_only_count': {'type': 'integer', 'minimum': 0}, 'warnings': {'type': 'array', 'items': {'type': 'string'}}}}}}]},
     'list_corpus_papers': {'type': 'object', 'required': ['count', 'papers'], 'properties': {'count': {'type': 'integer', 'minimum': 0}, 'papers': {'type': 'array', 'items': {'type': 'object'}}}},
     'search_arxiv': {'type': 'array', 'items': {'type': 'object'}},
     'search_paperlist': {'type': 'object', 'required': ['papers'], 'properties': {'papers': {'type': 'array', 'items': {'type': 'object'}}}},

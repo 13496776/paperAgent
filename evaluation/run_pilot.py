@@ -34,8 +34,10 @@ def returned_chunks(calls):
     for call in calls:
         if call.get('name') != 'retrieve_chunks' or call.get('status') != 'completed':
             continue
-        if isinstance(call.get('result'), list):
-            hits.extend(item for item in call['result'] if isinstance(item, dict) and item.get('id'))
+        result = call.get('result')
+        chunks = result.get('hits', []) if isinstance(result, dict) else result
+        if isinstance(chunks, list):
+            hits.extend(item for item in chunks if isinstance(item, dict) and item.get('id'))
     return hits
 
 

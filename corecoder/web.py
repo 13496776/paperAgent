@@ -4,8 +4,10 @@ import hmac
 import json
 import math
 import os
+import re
 import threading
 import time
+import unicodedata
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -126,6 +128,28 @@ def import_paperlist(user, ident, *, record=None):
 _shared_index_lock = threading.Lock()
 
 
+def _paper_matches(query, papers):
+    """Only unambiguous exact identifiers, full titles, or title-prefix aliases."""
+    text = unicodedata.normalize('NFKC', query).casefold()
+    strong, aliases = [], []
+
+    def mentioned(value):
+        return bool(re.search(r'(?<![a-z0-9])' + re.escape(value.casefold()) + r'(?![a-z0-9])', text))
+
+    for paper in papers:
+        title = unicodedata.normalize('NFKC', paper['title']).strip()
+        prefix = title.split(':', 1)[0].strip() if ':' in title else ''
+        ident = str(paper['id'])
+        if (len(title) >= 8 and mentioned(title)) or (len(ident) >= 16 and mentioned(ident)):
+            strong.append((paper, prefix.casefold()))
+        elif 3 <= len(prefix) <= 50 and mentioned(prefix):
+            aliases.append((paper, prefix.casefold()))
+    # An exact full title disambiguates competing papers sharing its prefix,
+    # but an independent second alias still makes the query multi-paper.
+    disambiguated = {prefix for _, prefix in strong if prefix}
+    return [paper for paper, _ in strong] + [paper for paper, prefix in aliases if prefix not in disambiguated]
+
+
 class UserRetriever:
     def __init__(self, user):
         self.user = user
@@ -160,10 +184,10 @@ class UserRetriever:
             result.update(year=year, unknown_year_count=unknown_year_count)
         return result
 
-    def retrieve(self, query):
-        return self.retrieve_with_progress(query)
+    def retrieve(self, query, paper_id=None):
+        return self.retrieve_with_progress(query, paper_id=paper_id)['hits']
 
-    def retrieve_with_progress(self, query, progress=None):
+    def retrieve_with_progress(self, query, progress=None, paper_id=None):
         from .papers.retrieval import bm25, fuse_and_rerank
 
         limit = int(os.environ.get("PAPER_RETRIEVAL_LIMIT", "5"))
@@ -175,23 +199,65 @@ class UserRetriever:
             progress("corpus_load", "读取论文元数据")
         store = corpus_store()
         papers = store.papers(self.user)
+        if progress:
+            progress('index_inventory', '检查论文的索引状态与首个分块向量')
+        states = store.index_states(self.user)
+        matches = _paper_matches(query, papers)
+        if paper_id is not None:
+            if not any(paper['id'] == paper_id for paper in papers):
+                raise ValueError('指定论文不存在或不属于当前用户')
+            if len(matches) == 1 and matches[0]['id'] != paper_id:
+                raise ValueError('指定论文 ID 与查询中的论文名称不一致')
+            target = paper_id
+        else:
+            target = matches[0]['id'] if len(matches) == 1 else None
         index = os.environ.get("PAPER_CORPUS_PATH")
-        shared = json.loads(Path(index).read_text(encoding="utf-8")) if index else []
-        if not any(paper["status"] != "metadata_only" for paper in papers) and not shared:
-            return []
+        shared = json.loads(Path(index).read_text(encoding="utf-8")) if index and paper_id is None else []
+        selected = next((s for s in states if s['id'] == target), None)
+        if selected and selected['vector_ready'] and progress:
+            progress('index_verify', f"核对指定论文的分块向量：{selected['title']}（ID: {target}）")
+        missing_vectors = bool(selected and selected['vector_ready'] and not store.paper_vectors_complete(self.user, target))
+        if selected and selected['content_scope'] != 'metadata_only' and (not selected['vector_ready'] or missing_vectors):
+            if progress:
+                progress('index_target', f"仅构建或恢复指定论文索引：{selected['title']}（ID: {target}）")
+            embedding, reranker = get_models()
+            # A missing collection/vector can coexist with a stale 'ready'
+            # SQLite row; rebuild this one paper rather than trusting it.
+            force = selected['status'] == 'ready' and (not selected['vector_ready'] or missing_vectors)
+            store.ensure_indexed(self.user, embedding, paper_id=target, progress=progress, force=force)
+            states = store.index_states(self.user)
+        scoped = [s for s in states if paper_id is None or s['id'] == paper_id]
+        pending = [s for s in scoped if s['content_scope'] != 'metadata_only' and not s['vector_ready']]
+        metadata_only = [s for s in scoped if s['content_scope'] == 'metadata_only']
+        coverage = {'scope': 'paper' if paper_id else 'corpus', 'paper_id': paper_id,
+                    'matched_paper_id': target, 'ambiguous_match_count': len(matches) if len(matches) > 1 else 0,
+                    'vector_check': '按论文检查元数据和首个分块向量；单篇目标会逐块核对。',
+                    'vector_ready_count': sum(s['vector_ready'] for s in scoped),
+                    'pending_count': len(pending), 'metadata_only_count': len(metadata_only),
+                    'pending_papers': [{'id': s['id'], 'title': s['title'], 'status': s['status']} for s in pending[:10]],
+                    'shared_vector_ready': None, 'warnings': []}
+        if pending:
+            coverage['warnings'].append(f"{len(pending)} 篇论文的向量索引未就绪；本次不会自动重建全库，搜索可能不完整。")
+        if metadata_only:
+            coverage['warnings'].append(f"{len(metadata_only)} 篇论文只有元数据，无法检索正文或摘要。")
+        if len(matches) > 1 and paper_id is None:
+            coverage['warnings'].append('查询匹配多篇论文，未自动选择目标或构建索引；请提供唯一论文 ID。')
+        if progress and coverage['warnings']:
+            progress('index_coverage', '；'.join(coverage['warnings']))
+        if not any(s['status'] == 'ready' for s in scoped) and not shared:
+            return {'hits': [], 'coverage': coverage}
         if progress:
             progress("model_loading", "加载或复用嵌入模型和重排模型")
         embedding, reranker = get_models()
-        store.ensure_indexed(self.user, embedding, progress=progress)
         if progress:
             progress("query_embedding", "编码查询向量")
         vector = embedding.encode([query], normalize_embeddings=True)[0]
         if progress:
             progress("bm25", "SQLite 关键词检索")
-        lexical = store.lexical_search(self.user, query, candidates)
+        lexical = store.lexical_search(self.user, query, candidates, paper_id=paper_id)
         if progress:
             progress("vector_search", "Chroma 向量检索")
-        dense = store.vector_search(self.user, vector, candidates)
+        dense = store.vector_search(self.user, vector, candidates, paper_id=paper_id)
         keys = list(dict.fromkeys(lexical + dense))
         personal = store.chunks_for_keys(self.user, keys)
         ranked_lists = [[("personal", *item) for item in lexical], [("personal", *item) for item in dense]]
@@ -205,14 +271,21 @@ class UserRetriever:
             if progress:
                 progress("index_wait", "检查或等待共享语料向量索引")
             with _shared_index_lock:
-                shared_dense = store.shared_vector_search(shared, vector, embedding, candidates, progress)
+                shared_dense = store.shared_vector_search(shared, vector, embedding, candidates, progress, build=False)
+            coverage['shared_vector_ready'] = shared_dense is not None
+            if shared_dense is None:
+                coverage['warnings'].append('共享语料向量索引未就绪，本次仅使用其关键词检索。')
+                if progress:
+                    progress('index_coverage', coverage['warnings'][-1])
+                shared_dense = []
             ranked_lists.extend([[('shared', i) for i in shared_lex], [('shared', i) for i in shared_dense]])
             chunks.update({('shared', i): {**shared[i], "_scope": "shared"} for i in set(shared_lex + shared_dense)})
         results = fuse_and_rerank(query, ranked_lists, chunks, reranker, limit, threshold, progress)
         personal_keys = [(chunk["paper_id"], chunk["id"]) for chunk in results if chunk.get("_scope") == "personal"]
         still_available = store.chunks_for_keys(self.user, personal_keys)
-        return [{key: value for key, value in chunk.items() if key != "_scope"} for chunk in results
+        hits = [{key: value for key, value in chunk.items() if key != "_scope"} for chunk in results
                 if chunk.get("_scope") != "personal" or (chunk["paper_id"], chunk["id"]) in still_available]
+        return {'hits': hits, 'coverage': coverage}
 
 
 def get_tools(user):

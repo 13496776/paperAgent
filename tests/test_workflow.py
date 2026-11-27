@@ -602,3 +602,23 @@ def test_llm_retries_malformed_tool_json_without_executing(monkeypatch):
     response = llm.chat(messages=[{'role': 'user', 'content': 'search'}], tools=schema)
     assert response.tool_calls[0].arguments == {'query': 'ok'}
     assert llm.client.chat.completions.create.call_count == 2
+
+
+def test_incomplete_index_coverage_is_in_final_and_evidence(tmp_path):
+    class Retriever:
+        def retrieve(self, query):
+            return {'hits': [{'id': 'c1', 'paper_id': 'p1', 'text': 'evidence'}],
+                    'coverage': {'pending_count': 1, 'metadata_only_count': 0,
+                                 'warnings': ['1 篇论文的向量索引未就绪']}}
+    plan = {'tasks': [{'id': 'r', 'worker': 'retrieval', 'goal': 'find', 'depends_on': []},
+                      {'id': 'd', 'worker': 'delivery', 'goal': 'answer', 'depends_on': ['r']}]}
+    replies = [LLMResponse(content=json.dumps(plan)),
+               LLMResponse(tool_calls=[ToolCall('c', 'retrieve_chunks', {'query': 'q'})]),
+               LLMResponse(content='找到了证据'), LLMResponse(content='这是回答')]
+    supervisor = Supervisor(Scripted(replies), SessionStore(fakeredis.FakeRedis(), tmp_path / 'coverage.sqlite'),
+                            ResearchTools(Retriever()))
+    supervisor.start('alice', 'session', 'question')
+    result = supervisor.resume('alice', 'session')
+    assert '1 篇论文的向量索引未就绪' in result['result']
+    context = json.loads(result['tasks'][1]['messages'][1]['content'])
+    assert context['previous_evidence'][0]['id'] == 'c1'

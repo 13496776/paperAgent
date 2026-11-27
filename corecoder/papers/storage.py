@@ -202,7 +202,9 @@ class CorpusStore:
             raise ValueError("paper was deleted while saving")
         return {**result, "chunks": len(self.chunks(owner, paper["id"])), "created": not bool(existing)}
 
-    def ensure_indexed(self, owner, encoder, paper_id=None, progress=None):
+    def ensure_indexed(self, owner, encoder, paper_id=None, progress=None, force=False):
+        if force and paper_id is None:
+            raise ValueError('force is only allowed for a single paper')
         with self._connect() as db:
             query = "SELECT id,status,model,vector_path FROM papers WHERE owner=?"
             args = [owner]
@@ -215,17 +217,20 @@ class CorpusStore:
                 self.delete(owner, ident)
             elif status == "metadata_only":
                 continue
-            elif status != "ready" or model != self.model or vector_path != self.chroma_path or not Path(self.chroma_path).exists():
+            elif force or status != "ready" or model != self.model or vector_path != self.chroma_path or not Path(self.chroma_path).exists():
                 if progress:
                     progress("index_build", f"正在构建或恢复论文向量索引（{number}/{len(rows)}）")
-                self._index(owner, ident, encoder)
+                if force:
+                    self._index(owner, ident, encoder, force=True)
+                else:
+                    self._index(owner, ident, encoder)
 
-    def _index(self, owner, ident, encoder):
+    def _index(self, owner, ident, encoder, force=False):
         name = _collection_name(self.model)
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT status,model,generation,vector_path FROM papers WHERE owner=? AND id=?", (owner, ident)).fetchone()
-            if not row or row[0] == "deleting" or (row[0] == "ready" and row[1] == self.model and row[3] == self.chroma_path
+            if not row or row[0] == "deleting" or (not force and row[0] == "ready" and row[1] == self.model and row[3] == self.chroma_path
                                                   and Path(self.chroma_path).exists()):
                 return
             generation = row[2]
@@ -314,36 +319,111 @@ class CorpusStore:
                 found.update({(row[0], row[1]): json.loads(row[2]) for row in rows})
         return found
 
-    def lexical_search(self, owner, query, limit):
+    def index_states(self, owner):
+        """Describe current vector availability without rebuilding any indexes."""
+        path_exists = Path(self.chroma_path).exists()
+        with self._connect() as db:
+            rows = db.execute("SELECT p.id,p.title,p.status,p.content_scope,p.model,p.vector_path, "
+                              "(SELECT c.chunk_id FROM paper_chunks c WHERE c.owner=p.owner AND c.paper_id=p.id "
+                              "ORDER BY c.ordinal LIMIT 1) FROM papers p "
+                              "WHERE p.owner=? AND p.status!='deleting'", (owner,)).fetchall()
+        found = set()
+        if path_exists and any(status == 'ready' and model == self.model and path == self.chroma_path
+                               for _, _, status, _, model, path, _ in rows):
+            from chromadb.errors import NotFoundError
+            try:
+                collection = _client(self.chroma_path).get_collection(_collection_name(self.model), embedding_function=None)
+                markers = [_vector_id(owner, ident, chunk) for ident, _, status, _, model, path, chunk in rows
+                           if status == 'ready' and model == self.model and path == self.chroma_path and chunk]
+                batch_size = _client(self.chroma_path).get_max_batch_size()
+                for start in range(0, len(markers), batch_size):
+                    found.update(collection.get(ids=markers[start:start + batch_size], include=[])['ids'])
+            except NotFoundError:
+                path_exists = False
+        return [{"id": ident, "title": title, "status": status, "content_scope": scope,
+                 "vector_ready": status == 'ready' and model == self.model
+                     and path == self.chroma_path and path_exists and bool(chunk)
+                     and _vector_id(owner, ident, chunk) in found}
+                for ident, title, status, scope, model, path, chunk in rows]
+
+    def paper_vectors_complete(self, owner, paper_id):
+        """Verify the selected paper's vector IDs without modifying the index."""
+        if not Path(self.chroma_path).exists():
+            return False
+        from chromadb.errors import NotFoundError
+        try:
+            collection = _client(self.chroma_path).get_collection(_collection_name(self.model), embedding_function=None)
+        except NotFoundError:
+            return False
+        with self._connect() as db:
+            chunks = [row[0] for row in db.execute('SELECT chunk_id FROM paper_chunks WHERE owner=? AND paper_id=?',
+                                                   (owner, paper_id))]
+        if not chunks:
+            return False
+        ids = [_vector_id(owner, paper_id, ident) for ident in chunks]
+        batch_size = _client(self.chroma_path).get_max_batch_size()
+        for start in range(0, len(ids), batch_size):
+            batch = ids[start:start + batch_size]
+            if set(collection.get(ids=batch, include=[])['ids']) != set(batch):
+                return False
+        return True
+
+    def lexical_search(self, owner, query, limit, paper_id=None):
         terms = list(dict.fromkeys(tokenize(query)))[:64]
         if not terms:
             return []
         expression = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
         with self._connect() as db:
-            rows = db.execute("SELECT f.paper_id,f.chunk_id FROM paper_chunk_fts f JOIN papers p "
+            sql = ("SELECT f.paper_id,f.chunk_id FROM paper_chunk_fts f JOIN papers p "
                               "ON p.owner=f.owner AND p.id=f.paper_id WHERE paper_chunk_fts MATCH ? "
-                              "AND f.owner=? AND p.status='ready' ORDER BY bm25(paper_chunk_fts) LIMIT ?",
-                              (expression, owner, limit)).fetchall()
+                              "AND f.owner=? AND p.status='ready'")
+            params = [expression, owner]
+            if paper_id is not None:
+                sql += " AND f.paper_id=?"
+                params.append(paper_id)
+            rows = db.execute(sql + " ORDER BY bm25(paper_chunk_fts) LIMIT ?", (*params, limit)).fetchall()
         return rows
 
-    def vector_search(self, owner, query_vector, limit):
+    def vector_search(self, owner, query_vector, limit, paper_id=None):
         with self._connect() as db:
-            ready = [row[0] for row in db.execute("SELECT id FROM papers WHERE owner=? AND status='ready' AND model=? AND vector_path=?",
-                                                  (owner, self.model, self.chroma_path))]
+            sql = "SELECT id FROM papers WHERE owner=? AND status='ready' AND model=? AND vector_path=?"
+            args = [owner, self.model, self.chroma_path]
+            if paper_id is not None:
+                sql += " AND id=?"
+                args.append(paper_id)
+            ready = [row[0] for row in db.execute(sql, args)]
+        if not Path(self.chroma_path).exists():
+            return []
         if not ready:
             return []
-        collection = self._collection(_collection_name(self.model))
+        from chromadb.errors import NotFoundError
+        try:
+            collection = _client(self.chroma_path).get_collection(_collection_name(self.model), embedding_function=None)
+        except NotFoundError:
+            return []
         result = collection.query(query_embeddings=[[float(v) for v in query_vector]], n_results=limit,
                                   where={"$and": [{"owner": owner}, {"paper_id": {"$in": ready}}]},
                                   include=["metadatas"])
         return [(m["paper_id"], m["chunk_id"]) for m in result["metadatas"][0]]
 
-    def shared_vector_search(self, chunks, query_vector, encoder, limit, progress=None):
+    def shared_vector_search(self, chunks, query_vector, encoder, limit, progress=None, build=True):
         fingerprint = hashlib.sha256(json.dumps(chunks, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-        collection = self._collection(_collection_name("shared:" + self.model + ":" + fingerprint))
+        name = _collection_name("shared:" + self.model + ":" + fingerprint)
+        if build:
+            collection = self._collection(name)
+        else:
+            if not Path(self.chroma_path).exists():
+                return None
+            from chromadb.errors import NotFoundError
+            try:
+                collection = _client(self.chroma_path).get_collection(name, embedding_function=None)
+            except NotFoundError:
+                return None
         ids = [str(i) for i in range(len(chunks))]
-        batch_size = _client(self.chroma_path).get_max_batch_size()
         if collection.count() != len(ids):
+            if not build:
+                return None
+            batch_size = _client(self.chroma_path).get_max_batch_size()
             if progress:
                 progress("index_build", f"构建或恢复共享语料索引，检查 {len(ids)} 个分块")
             for start in range(0, len(ids), batch_size):

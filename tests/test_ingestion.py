@@ -533,8 +533,8 @@ def test_rag_workflow_with_real_retrieval_components_and_mocked_models(tmp_path,
             if self.calls == 3:
                 import json
                 hits = json.loads(messages[-1]["content"])
-                assert hits[0]["title"] == "Retrieval paper"
-                assert hits[0]["doi"] == "10.1000/example"
+                assert hits["hits"][0]["title"] == "Retrieval paper"
+                assert hits["hits"][0]["doi"] == "10.1000/example"
                 return LLMResponse(content="RAG uses evidence [Retrieval paper].")
             assert "RAG uses evidence" in messages[-1]["content"]
             assert "10.1000/example" in messages[-1]["content"]
@@ -635,3 +635,145 @@ def test_deleted_paper_is_not_returned_by_inflight_rerank(tmp_path, monkeypatch)
 
     monkeypatch.setattr(web, "get_models", lambda: (encoder, DeletingReranker()))
     assert web.UserRetriever("alice").retrieve("retrieval") == []
+
+
+def test_targeted_retrieval_indexes_only_matching_paper(tmp_path, monkeypatch):
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'target.sqlite'))
+    monkeypatch.delenv('PAPER_CORPUS_PATH', raising=False)
+    embedding = Embedding()
+    class Ranker:
+        def predict(self, pairs, activation_fn):
+            return [0.9] * len(pairs)
+    monkeypatch.setattr(web, 'get_models', lambda: (embedding, Ranker()))
+    store = web.corpus_store()
+    for owner, ident, title in [('alice', 'a', 'AA-CLIP: Vision Detection'),
+                                 ('alice', 'b', 'Other Research Paper'),
+                                 ('bob', 'private', 'Private Research Paper')]:
+        store.add(owner, {'id': ident, 'title': title, 'text': 'anomaly retrieval',
+                          'authors': '', 'source': '', 'doi': ''}, embedding)
+    with store._connect() as db:
+        db.execute("UPDATE papers SET status='indexing' WHERE owner='alice'")
+    rebuilt = []
+    original = CorpusStore._index
+    def record_index(self, owner, ident, encoder):
+        rebuilt.append((owner, ident))
+        return original(self, owner, ident, encoder)
+    monkeypatch.setattr(CorpusStore, '_index', record_index)
+    retriever = web.UserRetriever('alice')
+    broad = retriever.retrieve_with_progress('anomaly detection')
+    assert broad['hits'] == [] and broad['coverage']['pending_count'] == 2
+    assert rebuilt == []
+    target = retriever.retrieve_with_progress('请解释 AA-CLIP 的方法')
+    assert rebuilt == [('alice', 'a')]
+    assert target['coverage']['matched_paper_id'] == 'a'
+    assert target['coverage']['pending_count'] == 1
+    assert target['coverage']['warnings']
+    assert {p['id']: p['status'] for p in store.papers('alice')} == {'a': 'ready', 'b': 'indexing'}
+    assert store.papers('bob')[0]['status'] == 'ready'
+    assert all(hit['paper_id'] == 'a' for hit in target['hits'])
+    target_again = retriever.retrieve_with_progress('请解释 AA-CLIP 的方法')
+    assert rebuilt == [('alice', 'a')]
+    assert target_again['coverage']['pending_count'] == 1
+
+
+def test_explicit_paper_id_scopes_both_retrieval_routes(tmp_path, monkeypatch):
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'scope.sqlite'))
+    monkeypatch.delenv('PAPER_CORPUS_PATH', raising=False)
+    encoder = Embedding()
+    class Ranker:
+        def predict(self, pairs, activation_fn): return [0.9] * len(pairs)
+    monkeypatch.setattr(web, 'get_models', lambda: (encoder, Ranker()))
+    store = web.corpus_store()
+    for ident in ('a', 'b'):
+        store.add('alice', {'id': ident, 'title': f'Research Paper {ident}', 'text': 'shared retrieval evidence',
+                            'authors': '', 'source': '', 'doi': ''}, encoder)
+    retriever = web.UserRetriever('alice')
+    result = retriever.retrieve_with_progress('shared retrieval evidence', paper_id='b')
+    assert result['coverage']['scope'] == 'paper'
+    assert result['hits'] and all(hit['paper_id'] == 'b' for hit in result['hits'])
+    assert all(paper == 'b' for paper, _ in store.lexical_search('alice', 'shared', 10, paper_id='b'))
+    assert all(paper == 'b' for paper, _ in store.vector_search('alice', [1, 0], 10, paper_id='b'))
+    from corecoder.workflow.engine import ResearchTools
+    tool_result = ResearchTools(retriever).execute('retrieval', 'retrieve_chunks',
+                                                   {'query': 'shared retrieval evidence', 'paper_id': 'b'})
+    assert tool_result['coverage']['paper_id'] == 'b'
+    assert tool_result['hits'] and all(hit['paper_id'] == 'b' for hit in tool_result['hits'])
+    with pytest.raises(ValueError, match='不存在或不属于'):
+        retriever.retrieve_with_progress('shared retrieval', paper_id='missing')
+    with pytest.raises(ValueError, match='不一致'):
+        retriever.retrieve_with_progress('Research Paper a 的方法是什么？', paper_id='b')
+
+
+def test_ambiguous_names_and_metadata_only_never_start_index(tmp_path, monkeypatch):
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'ambiguous.sqlite'))
+    monkeypatch.delenv('PAPER_CORPUS_PATH', raising=False)
+    encoder = Embedding()
+    store = web.corpus_store()
+    for ident, title in [('a', 'AATEST: First Paper'), ('b', 'AATEST: Second Paper')]:
+        store.add('alice', {'id': ident, 'title': title, 'text': 'anomaly retrieval',
+                            'authors': '', 'source': '', 'doi': ''}, encoder)
+    store.add_metadata('alice', {'id': 'meta', 'title': 'METAPAPER: metadata only',
+                                 'authors': '', 'source': '', 'doi': ''})
+    with store._connect() as db:
+        db.execute("UPDATE papers SET status='indexing' WHERE owner='alice' AND id IN ('a','b')")
+    monkeypatch.setattr(web, 'get_models', lambda: pytest.fail('must not build ambiguous or metadata-only indexes'))
+    retriever = web.UserRetriever('alice')
+    ambiguous = retriever.retrieve_with_progress('请分析 AATEST 的方法')
+    assert ambiguous['hits'] == [] and ambiguous['coverage']['ambiguous_match_count'] == 2
+    assert ambiguous['coverage']['pending_count'] == 2
+    assert ambiguous['coverage']['metadata_only_count'] == 1
+    assert '未自动选择' in ' '.join(ambiguous['coverage']['warnings'])
+    metadata = retriever.retrieve_with_progress('METAPAPER 的方法是什么？', paper_id='meta')
+    assert metadata['hits'] == [] and metadata['coverage']['metadata_only_count'] == 1
+    assert '只有元数据' in ' '.join(metadata['coverage']['warnings'])
+
+
+def test_shared_unindexed_corpus_uses_lexical_without_building_vectors(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'shared_search.sqlite'))
+    index = tmp_path / 'shared.json'
+    index.write_text(json.dumps([{'id': 'shared-chunk', 'paper_id': 'shared-paper', 'title': 'Shared',
+                                  'text': 'anomaly detection'}]), encoding='utf-8')
+    monkeypatch.setenv('PAPER_CORPUS_PATH', str(index))
+    class Ranker:
+        def predict(self, pairs, activation_fn): return [0.9] * len(pairs)
+    monkeypatch.setattr(web, 'get_models', lambda: (Embedding(), Ranker()))
+    result = web.UserRetriever('alice').retrieve_with_progress('anomaly')
+    assert result['hits'][0]['id'] == 'shared-chunk'
+    assert result['coverage']['shared_vector_ready'] is False
+    assert '仅使用其关键词' in ' '.join(result['coverage']['warnings'])
+    assert not (tmp_path / 'shared_search-chroma').exists()
+
+
+def test_full_title_disambiguates_shared_alias_but_preserves_other_matches():
+    papers = [{'id': '1', 'title': 'AATEST: First Paper'}, {'id': '2', 'title': 'AATEST: Second Paper'},
+              {'id': '3', 'title': 'BBTEST: Third Paper'}]
+    assert [p['id'] for p in web._paper_matches('AATEST 的研究', papers)] == ['1', '2']
+    assert [p['id'] for p in web._paper_matches('AATEST: First Paper 的研究', papers)] == ['1']
+    assert {p['id'] for p in web._paper_matches('比较 AATEST: First Paper 和 BBTEST', papers)} == {'1', '3'}
+
+
+def test_missing_vector_collection_recovers_only_the_target(tmp_path, monkeypatch):
+    from corecoder.papers.storage import _client, _collection_name
+    monkeypatch.setenv('CORECODER_SQLITE_PATH', str(tmp_path / 'missing_vectors.sqlite'))
+    monkeypatch.delenv('PAPER_CORPUS_PATH', raising=False)
+    encoder = Embedding()
+    class Ranker:
+        def predict(self, pairs, activation_fn): return [0.9] * len(pairs)
+    monkeypatch.setattr(web, 'get_models', lambda: (encoder, Ranker()))
+    store = web.corpus_store()
+    for ident in ('a', 'b'):
+        store.add('alice', {'id': ident, 'title': f'Research Paper {ident}', 'text': 'anomaly detection',
+                            'authors': '', 'source': '', 'doi': ''}, encoder)
+    _client(store.chroma_path).delete_collection(_collection_name(store.model))
+    retriever = web.UserRetriever('alice')
+    broad = retriever.retrieve_with_progress('anomaly detection')
+    assert broad['coverage']['pending_count'] == 2
+    assert all(not s['vector_ready'] for s in store.index_states('alice'))
+    recovered = retriever.retrieve_with_progress('Research Paper a', paper_id='a')
+    assert recovered['hits'] and all(hit['paper_id'] == 'a' for hit in recovered['hits'])
+    assert store.paper_vectors_complete('alice', 'a')
+    assert not store.paper_vectors_complete('alice', 'b')
+    after = retriever.retrieve_with_progress('anomaly detection')
+    assert after['coverage']['pending_count'] == 1
+    assert after['coverage']['pending_papers'][0]['id'] == 'b'
