@@ -193,3 +193,37 @@ def test_windows_replace_retries_only_expected_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(persistent.os, 'replace', permanent)
     with pytest.raises(PermissionError):
         persistent._replace_workflow_file(source, target)
+
+
+def test_legacy_resume_with_first_163_does_not_replay_them(tmp_path, monkeypatch, capsys):
+    import sys
+    from evaluation import run_pilot
+    records = [{'id': f'PC-{i:03}', 'category': 'test', 'turns': [], 'judge': {}} for i in range(1, 164)]
+    old = tmp_path / 'old.json'
+    old.write_text(json.dumps({'dataset_id': 'd', 'provider': 'deepseek', 'judge_enabled': False,
+                               'started_at': 1, 'cases': records}, indent=2), encoding='utf-8')
+    dataset = tmp_path / 'data.json'
+    dataset.write_text(json.dumps({'dataset_id': 'd', 'corpus': {'paper_count': 0}, 'cases': [
+        {'id': f'PC-{i:03}', 'category': 'test'} for i in range(1, 165)]}), encoding='utf-8')
+    evidence = tmp_path / 'evidence.json'
+    evidence.write_text('{}', encoding='utf-8')
+    class Client:
+        def __init__(self, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+    monkeypatch.setattr(run_pilot.httpx, 'Client', Client)
+    monkeypatch.setattr(run_pilot, 'api', lambda c, m, p: {'evaluation_local_only': True} if p == '/api/settings' else [])
+    calls = []
+    def fake_case(client, case, provider, judge, evidence):
+        calls.append(case['id'])
+        return {'id': case['id'], 'category': 'test', 'turns': [], 'judge': {}}
+    monkeypatch.setattr(run_pilot, 'run_case', fake_case)
+    monkeypatch.setenv('PAPER_EVAL_TOKEN', 'test')
+    monkeypatch.setattr(sys, 'argv', ['run_pilot', '--dataset', str(dataset), '--evidence', str(evidence),
+                                     '--output', str(tmp_path / 'out'), '--no-judge', '--resume', str(old)])
+    run_pilot.main()
+    assert calls == ['PC-164']
+    output = capsys.readouterr().out
+    assert '已有 163 个案例' in output
+    assert '运行 PC-164' in output
+    assert '运行 PC-001' not in output
