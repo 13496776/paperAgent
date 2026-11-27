@@ -262,7 +262,8 @@ def test_review_streams_large_cases_without_json_load(tmp_path, monkeypatch):
         {'question': '请检索这篇论文', 'status': 'completed', 'workflow': {'tasks': [
             {'calls': [{'name': 'retrieve_chunks', 'status': 'failed', 'error': '检索超时',
                         'result': {'large_irrelevant_result': 'a' * (8 * 1024 * 1024)}}]}]}}],
-        'target_workflow': {'status': 'completed'}}
+        'target_workflow': {'status': 'completed'}, 'judge': {'success': False, 'reason': '回答证据不足'},
+        'compression_required': True, 'compression_verified': False}
     atomic_json(cases / 'F100-001.json', record)
     del record
     monkeypatch.setattr(review_report.json, 'load', lambda *args, **kwargs: pytest.fail('case must be streamed'))
@@ -274,3 +275,5 @@ def test_review_streams_large_cases_without_json_load(tmp_path, monkeypatch):
     assert row['工具调用数'] == '1' and row['工具失败数'] == '1'
     assert row['失败摘要'] == '检索超时'
     assert row['来源批次'] == 'run-1'
+    assert row['裁判结果'] == '未通过' and row['裁判说明'] == '回答证据不足'
+    assert row['压缩检查'] == '未确认'

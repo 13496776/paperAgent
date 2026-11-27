@@ -18,7 +18,9 @@ from evaluation.report_store import case_files
 def summarize_case(path):
     """Read only review fields, without materializing the workflow JSON tree."""
     output = {'id': None, 'category': '', 'status': '未到达或未知',
-              'turns': 0, 'calls': 0, 'failures': 0, 'errors': [], 'question': ''}
+              'turns': 0, 'calls': 0, 'failures': 0, 'errors': [], 'question': '',
+              'judge_success': None, 'judge_reason': '', 'judge_error': '',
+              'compression_required': False, 'compression_verified': False}
     call = None
     call_prefix = 'turns.item.workflow.tasks.item.calls.item'
     def add_error(value):
@@ -32,6 +34,14 @@ def summarize_case(path):
                 output['category'] = value
             elif prefix == 'target_workflow.status' and event == 'string':
                 output['status'] = value
+            elif prefix == 'judge.success' and event in ('boolean', 'null'):
+                output['judge_success'] = value
+            elif prefix == 'judge.reason' and event == 'string':
+                output['judge_reason'] = value[:1500]
+            elif prefix == 'judge.error' and event == 'string':
+                output['judge_error'] = value[:1500]
+            elif prefix in ('compression_required', 'compression_verified') and event == 'boolean':
+                output[prefix] = value
             elif prefix == 'turns.item' and event == 'start_map':
                 output['turns'] += 1
             elif prefix == 'turns.item.question' and event == 'string':
@@ -89,14 +99,18 @@ def make_review(directory, legacy=None):
             origin = '旧报告导入' if ident in imported else '旧版续跑新增（具体批次未知）'
         else:
             origin = '旧版混合记录（来源未知）'
+        judged = '通过' if record['judge_success'] is True else '未通过' if record['judge_success'] is False else '未评分'
+        compression = ('初步确认' if record['compression_verified'] else '未确认') if record['compression_required'] else '不要求'
         rows.append({'案例ID': ident, '类别': record['category'], '来源批次': origin,
                      '目标轮状态': record['status'], '已执行轮数': record['turns'],
+                     '裁判结果': judged, '裁判说明': record['judge_reason'] or record['judge_error'],
+                     '压缩检查': compression,
                      '工具调用数': record['calls'], '工具失败数': record['failures'],
                      '失败摘要': ' | '.join(record['errors'])[:1500],
                      '最后用户问题': record['question'], '结果文件': relative.as_posix()})
     rows.sort(key=lambda x: x['案例ID'])
     csv_path = directory / 'review.csv'
-    fields = ['案例ID', '类别', '来源批次', '目标轮状态', '已执行轮数', '工具调用数', '工具失败数', '失败摘要', '最后用户问题', '结果文件']
+    fields = ['案例ID', '类别', '来源批次', '目标轮状态', '已执行轮数', '裁判结果', '裁判说明', '压缩检查', '工具调用数', '工具失败数', '失败摘要', '最后用户问题', '结果文件']
     with csv_path.open('w', encoding='utf-8-sig', newline='') as output:
         writer = csv.DictWriter(output, fieldnames=fields)
         writer.writeheader()
@@ -113,16 +127,17 @@ def make_review(directory, legacy=None):
                 '<label>类别 <select id="category"><option value="">全部</option>' + ''.join(f'<option>{escape(v)}</option>' for v in sorted(groups)) + '</select></label>',
                 '<label>批次 <select id="origin"><option value="">全部</option>' + ''.join(f'<option>{escape(v)}</option>' for v in sorted(origins)) + '</select></label>',
                 '<label>状态 <select id="status"><option value="">全部</option>' + ''.join(f'<option>{escape(v)}</option>' for v in sorted({r['目标轮状态'] for r in rows})) + '</select></label>',
+                '<label>裁判 <select id="judge"><option value="">全部</option>' + ''.join(f'<option>{escape(v)}</option>' for v in sorted({r['裁判结果'] for r in rows})) + '</select></label>',
                 '<label>搜索 <input id="search" placeholder="案例 ID、问题、错误"></label><table><thead><tr>' + ''.join(f'<th>{escape(v)}</th>' for v in fields[:-1]) + '</tr></thead><tbody>']
     from urllib.parse import quote
     for row in rows:
-        attrs = ' '.join(f'data-{name}="{escape(row[key])}"' for name,key in [('category','类别'),('origin','来源批次'),('status','目标轮状态')])
+        attrs = ' '.join(f'data-{name}="{escape(row[key])}"' for name,key in [('category','类别'),('origin','来源批次'),('status','目标轮状态'),('judge','裁判结果')])
         cells = [f'<td><a href="{quote(row["结果文件"], safe="/")}">{escape(row["案例ID"])}</a></td>']
         cells.extend(f'<td>{escape(row[key])}</td>' for key in fields[1:-1])
         document.append(f'<tr {attrs}>' + ''.join(cells) + '</tr>')
     document.append('''</tbody></table><script>
-const inputs=['category','origin','status','search'].map(x=>document.getElementById(x));
-function filter(){const [c,o,s,q]=inputs.map(x=>x.value.toLowerCase());document.querySelectorAll('tbody tr').forEach(r=>{r.hidden=!!((c&&r.dataset.category.toLowerCase()!==c)||(o&&r.dataset.origin.toLowerCase()!==o)||(s&&r.dataset.status.toLowerCase()!==s)||(q&&!r.textContent.toLowerCase().includes(q)))})}inputs.forEach(x=>x.addEventListener('input',filter));</script></html>''')
+const inputs=['category','origin','status','judge','search'].map(x=>document.getElementById(x));
+function filter(){const [c,o,s,j,q]=inputs.map(x=>x.value.toLowerCase());document.querySelectorAll('tbody tr').forEach(r=>{r.hidden=!!((c&&r.dataset.category.toLowerCase()!==c)||(o&&r.dataset.origin.toLowerCase()!==o)||(s&&r.dataset.status.toLowerCase()!==s)||(j&&r.dataset.judge.toLowerCase()!==j)||(q&&!r.textContent.toLowerCase().includes(q)))})}inputs.forEach(x=>x.addEventListener('input',filter));</script></html>''')
     (directory / 'review.html').write_text('\n'.join(document), encoding='utf-8')
     return len(rows), csv_path, directory / 'review.html'
 
