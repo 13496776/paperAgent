@@ -41,20 +41,20 @@ flowchart LR
 
 首次安装依赖、下载或加载模型、建立论文索引可能耗时较长。模型已下载并不意味着已加载到当前进程内存。
 
-## 快速开始：Windows CMD
+## 快速开始：Linux
 
-以下命令假设已安装 Python、Node.js 和 npm，且当前目录为仓库根目录。
+以下命令假设已安装 Python 3.10+、Node.js 和 npm，且当前目录为仓库根目录。部分 Linux 发行版需要单独安装 Python 的 `venv` 组件。
 
 1. 创建并激活虚拟环境：
 
-   ```cmd
-   python -m venv .venv
-   .venv\Scripts\activate.bat
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
    ```
 
 2. 安装 Python 及前端依赖：
 
-   ```cmd
+   ```bash
    python run_paperagent.py --setup
    ```
 
@@ -62,24 +62,23 @@ flowchart LR
 
 3. 创建本地配置：
 
-   ```cmd
-   copy paperagent.config.example.json paperagent.config.json
-   notepad paperagent.config.json
+   ```bash
+   cp -n paperagent.config.example.json paperagent.config.json
    ```
 
-   至少填写 `deepseek_api_key` 或 `openai_api_key`。需要 Paperlist 在线搜索时填写 `paperlist_api_key`；请从 Paperlist 服务获取自己的密钥。若模型已下载到本地，可将 `embedding_model` 和 `reranker_model` 改为实际目录，例如 `D:/models/bge-m3`。不要提交包含密钥的配置文件。
+   使用你熟悉的文本编辑器打开 `paperagent.config.json`，至少填写 `deepseek_api_key` 或 `openai_api_key`。需要 Paperlist 在线搜索时填写 `paperlist_api_key`；请从 Paperlist 服务获取自己的密钥。若模型已下载到本地，可将 `embedding_model` 和 `reranker_model` 改为实际目录，例如 `/opt/models/bge-m3`。不要提交包含密钥的配置文件。`cp -n` 不会覆盖已有配置。
 
    启动脚本在配置文件不存在时也会创建一份示例配置，然后退出，等待你填写配置。
 
 4. 启动服务：
 
-   ```cmd
+   ```bash
    python run_paperagent.py
    ```
 
    启动后，本地后端使用 `http://127.0.0.1:8000`，前端使用 `http://127.0.0.1:5173`。终端会显示一次性登录链接和备用 JWT；选择与已配置密钥相匹配的模型服务。按 `Ctrl+C` 停止服务。
 
-如果没有激活虚拟环境，可将上述运行命令中的 `python` 替换为 `.venv\Scripts\python.exe`。Linux 或 macOS 用户可使用 `python -m venv .venv` 后执行 `source .venv/bin/activate`，再运行相同的 Python 命令。
+如果没有激活虚拟环境，可将上述运行命令中的 `python` 替换为 `.venv/bin/python`。上述地址仅监听运行服务的机器本地回环地址；如果在远程 Linux 主机运行，需要通过合适的端口转发从本机访问。
 
 ## 配置
 
