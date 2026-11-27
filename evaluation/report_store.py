@@ -25,6 +25,12 @@ def case_path(directory, case_id):
     return Path(directory) / 'cases' / (case_id + '.json')
 
 
+def case_files(directory):
+    """Read both the original flat layout and per-invocation layouts."""
+    root = Path(directory)
+    return sorted((root / 'cases').glob('*.json')) + sorted((root / 'runs').glob('*/cases/*.json'))
+
+
 def brief(record):
     """Retain only data needed by metrics, leaving large traces on disk."""
     def call(c):

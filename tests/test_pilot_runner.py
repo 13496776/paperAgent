@@ -122,9 +122,53 @@ def test_streamed_report_resume_imports_legacy_and_preserves_metrics(tmp_path, m
     assert report['metrics']['cases_attempted'] == 2
     assert json.loads((report_dir / 'cases' / 'PC-001.json').read_text(encoding='utf-8')) == old_record
     assert report['case_ids'] == ['PC-001', 'PC-002']
+    assert (report_dir / 'runs' / report['runs'][0] / 'cases' / 'PC-002.json').is_file()
+    assert (report_dir / 'review.html').is_file()
     monkeypatch.setattr(sys, 'argv', options + ['--resume', str(report_dir)])
     run_pilot.main()
     assert attempted == ['PC-002']
+
+
+def test_resume_sparse_ids_keeps_old_results_and_separates_new_run(tmp_path, monkeypatch):
+    import sys
+    from evaluation import run_pilot
+    from evaluation.report_store import atomic_json
+    from evaluation.review_report import make_review
+
+    directory = tmp_path / 'report'
+    (directory / 'cases').mkdir(parents=True)
+    atomic_json(directory / 'report.json', {'dataset_id': 'd', 'provider': 'deepseek', 'judge_enabled': False})
+    atomic_json(directory / 'cases' / 'PC-002.json', {'id': 'PC-002', 'category': 'x', 'turns': [], 'judge': {}})
+    data = tmp_path / 'dataset.json'
+    data.write_text(json.dumps({'dataset_id': 'd', 'corpus': {'paper_count': 0}, 'cases': [
+        {'id': f'PC-00{i}', 'category': 'x'} for i in range(1, 4)]}), encoding='utf-8')
+    evidence = tmp_path / 'evidence.json'
+    evidence.write_text('{}', encoding='utf-8')
+    class Client:
+        def __init__(self, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+    monkeypatch.setattr(run_pilot.httpx, 'Client', Client)
+    monkeypatch.setattr(run_pilot, 'api', lambda c, m, p: {'evaluation_local_only': True} if p == '/api/settings' else [])
+    called = []
+    def fake_case(client, case, provider, judge, evidence):
+        called.append(case['id'])
+        return {'id': case['id'], 'category': case['category'], 'turns': [], 'judge': {}}
+    monkeypatch.setattr(run_pilot, 'run_case', fake_case)
+    monkeypatch.setenv('PAPER_EVAL_TOKEN', 'test')
+    monkeypatch.setattr(sys, 'argv', ['run_pilot', '--dataset', str(data), '--evidence', str(evidence),
+                                     '--no-judge', '--resume', str(directory)])
+    run_pilot.main()
+    assert called == ['PC-001', 'PC-003']
+    report = json.loads((directory / 'report.json').read_text(encoding='utf-8'))
+    run = directory / 'runs' / report['runs'][0]
+    manifest = json.loads((run / 'run.json').read_text(encoding='utf-8'))
+    assert manifest['skipped_existing_ids'] == ['PC-002']
+    assert manifest['planned_case_ids'] == ['PC-001', 'PC-003']
+    assert manifest['new_case_ids'] == ['PC-001', 'PC-003']
+    assert not (run / 'cases' / 'PC-002.json').exists()
+    assert make_review(directory)[0] == 3
+    assert 'PC-001' in (directory / 'review.csv').read_text(encoding='utf-8-sig')
 
 
 def test_windows_replace_retries_only_expected_errors(tmp_path, monkeypatch):

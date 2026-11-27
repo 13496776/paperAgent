@@ -13,7 +13,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from evaluation.report_store import atomic_json, brief, case_path, legacy_report
+from evaluation.report_store import atomic_json, brief, case_files, case_path, legacy_report
 DEFAULT_DATASET = ROOT / 'evaluation/paperagent_pilot/pilot_dialogues.json'
 DEFAULT_EVIDENCE = ROOT / 'evaluation/paperagent_pilot/evidence_index.json'
 
@@ -254,11 +254,15 @@ def main():
                 atomic_json(path, value)
     (report_dir / 'cases').mkdir(exist_ok=True)
     summaries = []
-    for path in sorted((report_dir / 'cases').glob('*.json')):
+    found_ids = set()
+    for path in case_files(report_dir):
         with path.open(encoding='utf-8') as source:
             record = json.load(source)
-        if path != case_path(report_dir, record['id']):
+        if path.name != case_path(report_dir, record['id']).name:
             raise ValueError(f'案例文件名和 ID 不一致: {path}')
+        if record['id'] in found_ids:
+            raise ValueError(f"同一案例存在多个结果文件，请先人工检查: {record['id']}")
+        found_ids.add(record['id'])
         summaries.append(brief(record))
     completed_ids = {r['id'] for r in summaries}
     if completed_ids - {c['id'] for c in dataset['cases']}:
@@ -289,19 +293,32 @@ def main():
         cases = [case for case in cases if case['id'] not in unavailable]
         if not cases:
             raise RuntimeError('没有可运行的案例')
+        pending = [case for case in cases if case['id'] not in completed_ids]
+        skipped = [case['id'] for case in cases if case['id'] in completed_ids]
+        run_id = 'run-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
+        run_dir = report_dir / 'runs' / run_id
+        (run_dir / 'cases').mkdir(parents=True)
+        run = {'run_id': run_id, 'started_at': time.time(), 'previous_case_ids': sorted(completed_ids),
+               'skipped_existing_ids': skipped, 'planned_case_ids': [case['id'] for case in pending],
+               'new_case_ids': [], 'skipped_unready': unavailable}
+        atomic_json(run_dir / 'run.json', run)
+        report.setdefault('runs', []).append(run_id)
+        print(f'本次运行：{run_dir}；跳过已有 {len(skipped)} 例，计划执行 {len(pending)} 例。', flush=True)
+        print(f"待运行 ID：{', '.join(run['planned_case_ids']) or '无'}", flush=True)
+        print(f'已跳过 ID 的完整清单见：{run_dir / "run.json"}', flush=True)
         report['metrics'] = metrics(summaries)
         report['case_ids'] = sorted(completed_ids)
         atomic_json(report_path, report)
-        for case in cases:
-            if case['id'] in completed_ids:
-                continue
+        for case in pending:
             print(f"运行 {case['id']}：{case['category']}", flush=True)
             try:
                 record = run_case(client, case, args.provider, judge, evidence)
             except (httpx.HTTPError, ValueError, RuntimeError) as exc:
                 record = {'id': case['id'], 'category': case['category'], 'error': str(exc) or type(exc).__name__,
                           'compression_required': case.get('compression_required', False)}
-            atomic_json(case_path(report_dir, record['id']), record)
+            atomic_json(case_path(run_dir, record['id']), record)
+            run['new_case_ids'].append(record['id'])
+            atomic_json(run_dir / 'run.json', run)
             summaries.append(brief(record))
             completed_ids.add(record['id'])
             report['case_ids'] = sorted(completed_ids)
@@ -309,6 +326,12 @@ def main():
             atomic_json(report_path, report)
     print('测评报告：', report_path)
     print(json.dumps(report['metrics'], ensure_ascii=False, indent=2))
+    try:
+        from evaluation.review_report import make_review
+        count, csv_path, html_path = make_review(report_dir)
+        print(f'已为 {count} 个案例生成审阅索引：{html_path}；表格：{csv_path}')
+    except (OSError, ValueError) as exc:
+        print(f'生成审阅索引失败，可稍后运行 review_report.py：{exc}', file=sys.stderr)
 
 
 if __name__ == '__main__':
